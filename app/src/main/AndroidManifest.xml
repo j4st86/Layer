@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SYSTEM_EXEMPTED" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
+    <application
+        android:name=".LayerApp"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Layer"
+        android:localeConfig="@xml/locales_config"
+        android:networkSecurityConfig="@xml/network_security_config">
+
+        <meta-data
+            android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode_ui" />
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.Layer.Splash"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- VpnService uses systemExempted with FOREGROUND_SERVICE_SYSTEM_EXEMPTED.
+             Exact-alarm permissions that newer lint also asks for are not used. -->
+        <service
+            android:name=".vpn.LayerVpnService"
+            android:exported="false"
+            android:foregroundServiceType="systemExempted"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            android:stopWithTask="false"
+            tools:ignore="ForegroundServicePermission">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.net.VpnService.SUPPORTS_ALWAYS_ON"
+                android:value="true" />
+        </service>
+    </application>
+
+    <queries>
+        <package android:name="org.telegram.messenger" />
+        <package android:name="org.telegram.messenger.web" />
+        <package android:name="com.google.android.youtube" />
+        <package android:name="com.whatsapp" />
+        <package android:name="com.whatsapp.w4b" />
+        <package android:name="com.instagram.android" />
+        <package android:name="com.spotify.music" />
+        <package android:name="com.google.android.apps.youtube.music" />
+        <package android:name="com.netflix.mediaclient" />
+        <package android:name="com.discord" />
+        <package android:name="com.twitter.android" />
+        <package android:name="com.google.android.apps.bard" />
+        <package android:name="com.instagram.barcelona" />
+        <package android:name="com.zhiliaoapp.musically" />
+        <package android:name="com.ss.android.ugc.trill" />
+        <package android:name="app.morphe.android.youtube" />
+        <package android:name="app.morphe.android.apps.youtube.music" />
+        <package android:name="com.deniscerri.ytdl" />
+        <package android:name="com.openai.chatgpt" />
+        <package android:name="com.anthropic.claude" />
+        <package android:name="com.microsoft.copilot" />
+        <package android:name="ai.perplexity.app.android" />
+        <package android:name="io.elevenlabs.readerapp" />
+        <package android:name="com.suno.android" />
+        <package android:name="tv.twitch.android.app" />
+        <package android:name="com.disney.disneyplus" />
+        <package android:name="com.wbd.stream" />
+        <package android:name="com.hbo.hbonow" />
+        <package android:name="com.hulu.plus" />
+        <package android:name="com.cbs.app" />
+        <package android:name="com.cbs.ott" />
+        <package android:name="com.peacocktv.peacockandroid" />
+        <package android:name="com.crunchyroll.crunchyroid" />
+        <package android:name="com.dazn" />
+        <package android:name="com.facebook.katana" />
+        <package android:name="com.facebook.lite" />
+        <package android:name="com.snapchat.android" />
+        <package android:name="org.thoughtcrime.securesms" />
+        <package android:name="com.viber.voip" />
+        <package android:name="com.linkedin.android" />
+        <package android:name="com.pinterest" />
+        <package android:name="com.google.android.videos" />
+        <package android:name="com.google.android.apps.tv.launcherx" />
+        <package android:name="com.google.android.apps.tachyon" />
+        <package android:name="com.google.android.apps.meetings" />
+        <package android:name="com.google.android.apps.dynamite" />
+        <package android:name="com.google.android.apps.googlevoice" />
+        <package android:name="com.google.android.apps.chromecast.app" />
+        <package android:name="com.google.android.apps.labs.language.tailwind" />
+        <package android:name="ru.wb.wband" />
+        <package android:name="ru.aliexpress.buyer" />
+        <package android:name="ru.auto.ara" />
+        <package android:name="ru.belkacar.belkacar" />
+        <package android:name="youdrive.today" />
+        <package android:name="com.citymobil" />
+        <package android:name="com.carshering" />
+        <package android:name="com.deliveryclub" />
+        <package android:name="ru.dodopizza.app" />
+        <package android:name="fitness.ddx.ddx_fitness" />
+        <package android:name="ru.yandex.uber" />
+        <package android:name="spotnik.axmor.com" />
+        <package android:name="ru.ozon.app.android" />
+        <package android:name="com.vkontakte.android" />
+        <package android:name="com.wildberries.ru" />
+        <package android:name="ru.foodfox.client" />
+        <package android:name="ru.yandex.taxi" />
+        <package android:name="ru.yandex.mail" />
+        <package android:name="ru.yandex.metro" />
+        <package android:name="ru.yandex.yandexmaps" />
+        <package android:name="com.avito.android" />
+        <package android:name="ru.gosuslugi.auto" />
+        <package android:name="ru.pichesky.rosneft" />
+        <package android:name="com.apegroup.mcdonaldsrussia" />
+        <package android:name="ru.vtb24.mobilebanking.android" />
+        <package android:name="ru.globus.app" />
+        <package android:name="ru.rostel" />
+        <package android:name="com.yandex.mobile.drive" />
+        <package android:name="com.icemobile.lenta.prod" />
+        <package android:name="ru.serebryakovas.lukoilmobileapp" />
+        <package android:name="ru.mts.mymts" />
+        <package android:name="ru.mosparking.appnew" />
+        <package android:name="ru.sberbankmobile" />
+        <package android:name="ru.gibdd_pay.app" />
+        <package android:name="com.voltmobi.yakitoriya" />
+        <package android:name="ru.wildberries.team2" />
+        <package android:name="com.idamob.tinkoff.android" />
+        <package android:name="ru.yandex.rasp" />
+        <package android:name="ru.megafon.mlk" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+</manifest>

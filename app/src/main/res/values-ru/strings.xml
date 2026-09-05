@@ -1,0 +1,176 @@
+<resources>
+    <string name="app_name">Layer</string>
+
+    <string name="tab_home">Главная</string>
+    <string name="tab_apps">Приложения</string>
+    <string name="tab_domains">Домены</string>
+    <string name="tab_more">Ещё</string>
+    <string name="navi_one_layer_left">ещё 1 слой</string>
+
+    <string name="action_add">Добавить</string>
+    <string name="action_cancel">Отмена</string>
+    <string name="action_save">Сохранить</string>
+    <string name="action_delete">Удалить</string>
+    <string name="action_back">Назад</string>
+    <string name="action_got_it">Понятно</string>
+    <string name="action_undo">Отменить</string>
+    <string name="action_connect">Подключить</string>
+    <string name="action_disconnect">Отключить</string>
+    <string name="action_send">Отправить</string>
+    <string name="action_clear">Очистить</string>
+    <string name="action_reset">Сбросить</string>
+    <string name="action_open">Перейти</string>
+    <string name="why_needed">Зачем это нужно</string>
+    <string name="collapse">Свернуть</string>
+    <string name="expand">Развернуть</string>
+
+    <string name="mode_smart">Умный</string>
+    <string name="mode_vpn">VPN</string>
+    <string name="mode_direct">Напрямую</string>
+
+    <string name="status_connected">Подключено</string>
+    <string name="status_connecting">Подключение</string>
+    <string name="status_disconnected">Нет подключения</string>
+    <string name="status_error">Ошибка</string>
+    <string name="status_checking_servers">Проверка серверов…</string>
+    <string name="status_connecting_ellipsis">Подключение…</string>
+    <string name="status_reconnecting">Переподключение…</string>
+    <string name="status_disconnected_short">Отключено</string>
+    <string name="auto_select_server">Автоматический выбор сервера</string>
+    <string name="send_report">Отправить отчёт</string>
+    <string name="add_server_or_subscription">Добавить сервер или подписку</string>
+    <string name="subscription_added">Подписка добавлена</string>
+    <string name="server_added">Сервер добавлен</string>
+    <string name="battery_snackbar">Отключите оптимизацию батареи для стабильной работы</string>
+    <string name="recommended_apps_prompt">Добавить рекомендуемые приложения?</string>
+
+    <string name="add_title">Добавить</string>
+    <string name="add_qr">QR-код</string>
+    <string name="add_qr_subtitle">Сканировать подписку или VLESS</string>
+    <string name="add_link">Ссылка</string>
+    <string name="add_link_subtitle">Вставить vless:// или https://</string>
+    <string name="add_link_title">Добавить по ссылке</string>
+    <string name="add_link_label">VLESS или подписка</string>
+    <string name="add_link_placeholder">vless://… или https://…</string>
+    <string name="add_saving">Сохранение…</string>
+    <string name="qr_empty">В QR-коде нет текста</string>
+    <string name="qr_failed">Не удалось сканировать QR-код</string>
+
+    <string name="servers">Серверы</string>
+    <string name="no_servers_yet">Пока нет серверов</string>
+    <string name="no_servers_hint">Нажмите +, чтобы добавить по QR или ссылке.</string>
+    <string name="subscription_updated">Подписка обновлена</string>
+    <string name="subscription_update_failed">Не удалось обновить</string>
+    <string name="subscription_params">Параметры подписки</string>
+    <string name="refresh_subscription">Обновить подписку</string>
+    <string name="delete_subscription">Удалить подписку</string>
+    <string name="no_servers_in_subscription">В подписке пока нет серверов</string>
+    <string name="params_saved">Параметры сохранены</string>
+    <string name="save_failed">Не удалось сохранить</string>
+    <string name="delete_server">Удалить сервер</string>
+    <string name="delete_server_title">Удалить сервер?</string>
+    <string name="delete_subscription_title">Удалить подписку?</string>
+    <string name="delete_subscription_body">Будут удалены все серверы из «%1$s».</string>
+    <string name="server_params">Параметры сервера</string>
+    <string name="field_note">Примечание</string>
+    <string name="field_note_placeholder">Как показывать на главной</string>
+    <string name="field_name">Имя</string>
+    <string name="field_address">Адрес</string>
+    <string name="field_port">Порт</string>
+    <string name="no_servers_count">Нет серверов</string>
+
+    <plurals name="server_count">
+        <item quantity="one">%d сервер</item>
+        <item quantity="few">%d сервера</item>
+        <item quantity="many">%d серверов</item>
+        <item quantity="other">%d сервера</item>
+    </plurals>
+    <plurals name="minutes_count">
+        <item quantity="one">%d минута</item>
+        <item quantity="few">%d минуты</item>
+        <item quantity="many">%d минут</item>
+        <item quantity="other">%d минуты</item>
+    </plurals>
+
+    <string name="apps_title">Приложения</string>
+    <string name="apps_empty_title">Пока нет правил</string>
+    <string name="apps_empty_body">Без своего правила приложение идёт по доменам: заблокированные сайты — через VPS, остальные — напрямую. Добавьте его, чтобы пустить весь трафик через VPN или всегда без VPN.</string>
+    <string name="apps_add">Добавить приложение</string>
+    <string name="apps_search">Поиск по имени</string>
+    <string name="apps_help_title">Правила приложений</string>
+    <string name="apps_help_body">VPN — весь трафик приложения идёт через VPS.\nНапрямую — приложение всегда без VPN.\n\nБез своего правила приложение идёт по доменам:\nзаблокированные сайты — через VPS,\nостальные — напрямую.</string>
+    <string name="apps_how_to_route">Как направлять трафик этого приложения?</string>
+    <string name="rule_removed">Правило удалено</string>
+    <string name="delete_rule">Удалить правило</string>
+
+    <string name="domains_title">Домены</string>
+    <string name="domains_empty_title">Своих доменов пока нет</string>
+    <string name="domains_empty_body">Добавьте домен и укажите способ фильтрации его трафика.</string>
+    <string name="domains_help_title">Правила доменов</string>
+    <string name="domains_help_body">Свои правила важнее автоматических списков. Списки нельзя изменить: чтобы исключить сервис, добавьте свой домен. Кириллические зоны вроде .ру и .рф тоже можно.</string>
+    <string name="domains_lists_heading">Скачанные списки через VPN:</string>
+    <string name="add_domain">Добавить домен</string>
+    <string name="domain_placeholder">youtube.com или сайт.ру</string>
+
+    <string name="settings_title">Настройки</string>
+    <string name="settings_server">Сервер</string>
+    <string name="settings_auto_select">Автоматический выбор сервера</string>
+    <string name="settings_auto_select_on">Автоматически выбирать лучший доступный сервер.</string>
+    <string name="settings_auto_select_need_two">Для автоматического выбора нужно минимум 2 сервера</string>
+    <string name="settings_check_every">Проверять сервера каждые</string>
+    <string name="settings_routing">Маршрутизация</string>
+    <string name="settings_auto_lists">Автоматический список VPN</string>
+    <string name="settings_auto_lists_sub">YouTube, Telegram и другие списки itdoginfo идут через VPS.</string>
+    <string name="settings_ipv6_sub">Включайте, если сеть и сервер его поддерживают.</string>
+    <string name="settings_stability">Стабильность</string>
+    <string name="settings_logs">Логи и диагностика</string>
+    <string name="settings_logs_sub">Отправить отчёт без секретов</string>
+    <string name="report_saved">Отчёт сохранён: %1$s</string>
+    <string name="report_failed">Не удалось отправить отчёт</string>
+    <string name="settings_reset">Сброс</string>
+    <string name="settings_reset_rules">Сбросить правила</string>
+    <string name="settings_reset_rules_sub">Удалит правила приложений и доменов</string>
+    <string name="settings_reset_rules_button">Сбросить правила маршрутизации</string>
+    <string name="settings_reset_all">Сбросить всё</string>
+    <string name="settings_reset_all_sub">Отключит VPN и удалит ключ и настройки</string>
+    <string name="settings_reset_all_button">Сбросить все настройки</string>
+    <string name="settings_reset_rules_title">Сбросить правила?</string>
+    <string name="settings_reset_rules_body">Приложения и домены вернутся к умной маршрутизации.</string>
+    <string name="rules_reset">Правила сброшены</string>
+    <string name="always_on_info_body">Это системный режим Android, приложение само его не включает.\n\nЕсли включить «Всегда включённый VPN» для Layer, система поднимет соединение после перезагрузки и не даст ему просто исчезнуть, когда приложение выгрузится из памяти.</string>
+    <string name="settings_reset_all_title">Сбросить все настройки?</string>
+    <string name="settings_reset_all_body">VPN отключится. Ключ, сервер и правила будут удалены.</string>
+    <string name="background_usage">Работа в фоне</string>
+    <string name="battery_unrestricted">Без ограничений</string>
+    <string name="battery_optimized">Сейчас «Оптимизация». Нужен режим «Без ограничений», иначе Android может выгрузить VPN.</string>
+    <string name="battery_restricted">Выключена — включите «Разрешить работу в фоне» и выберите «Без ограничений».</string>
+    <string name="battery_settings">Настройки батареи</string>
+    <string name="always_on_hint">Чтобы VPN поднимался после перезагрузки, включите это в системе.</string>
+    <string name="vpn_settings">Настройки VPN</string>
+    <string name="language">Язык</string>
+    <string name="language_auto">Авто</string>
+    <string name="language_russian">Русский</string>
+    <string name="language_english">English</string>
+
+    <string name="navi_build">Сборка</string>
+    <string name="navi_app">Приложение</string>
+    <string name="navi_package">Пакет</string>
+    <string name="navi_device">Устройство</string>
+    <string name="navi_operator">Оператор</string>
+    <string name="navi_link_copied">Ссылка скопирована</string>
+    <string name="navi_open_diagnostics">Открыть диагностику</string>
+
+    <string name="diagnostics_title">Диагностика</string>
+    <string name="diagnostics_empty_title">Пока нет событий</string>
+    <string name="diagnostics_empty_body">События ядра, TUN, DNS и protect. Секреты не пишутся. «Отправить» — полный отчёт для отладки.</string>
+    <string name="send_report_chooser">Отправить отчёт</string>
+    <string name="report_subject">Layer отчёт</string>
+    <string name="vpn_channel_description">Статус VPN</string>
+
+    <string name="error_generic">Ошибка</string>
+    <string name="error_config">Ошибка конфигурации</string>
+    <string name="error_config_singbox">Ошибка конфигурации sing-box</string>
+    <string name="subscription_no_vless">В подписке нет VLESS-серверов.</string>
+    <string name="subscription_not_found">Подписка не найдена.</string>
+    <string name="server_not_found">Сервер не найден.</string>
+</resources>

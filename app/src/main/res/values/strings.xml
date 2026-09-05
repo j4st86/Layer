@@ -1,0 +1,172 @@
+<resources>
+    <string name="app_name">Layer</string>
+
+    <string name="tab_home">Home</string>
+    <string name="tab_apps">Apps</string>
+    <string name="tab_domains">Domains</string>
+    <string name="tab_more">More</string>
+    <string name="navi_one_layer_left">1 more layer</string>
+
+    <string name="action_add">Add</string>
+    <string name="action_cancel">Cancel</string>
+    <string name="action_save">Save</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_back">Back</string>
+    <string name="action_got_it">Got it</string>
+    <string name="action_undo">Undo</string>
+    <string name="action_connect">Connect</string>
+    <string name="action_disconnect">Disconnect</string>
+    <string name="action_send">Send</string>
+    <string name="action_clear">Clear</string>
+    <string name="action_reset">Reset</string>
+    <string name="action_open">Open</string>
+    <string name="why_needed">Why this is needed</string>
+    <string name="collapse">Collapse</string>
+    <string name="expand">Expand</string>
+
+    <string name="mode_smart">Smart</string>
+    <string name="mode_vpn">VPN</string>
+    <string name="mode_direct">Direct</string>
+
+    <string name="status_connected">Connected</string>
+    <string name="status_connecting">Connecting</string>
+    <string name="status_disconnected">Not connected</string>
+    <string name="status_error">Error</string>
+    <string name="status_checking_servers">Checking servers…</string>
+    <string name="status_connecting_ellipsis">Connecting…</string>
+    <string name="status_reconnecting">Reconnecting…</string>
+    <string name="status_disconnected_short">Disconnected</string>
+    <string name="auto_select_server">Automatic server selection</string>
+    <string name="send_report">Send report</string>
+    <string name="add_server_or_subscription">Add a server or subscription</string>
+    <string name="subscription_added">Subscription added</string>
+    <string name="server_added">Server added</string>
+    <string name="battery_snackbar">Turn off battery optimization for a stable VPN</string>
+    <string name="recommended_apps_prompt">Add recommended apps?</string>
+
+    <string name="add_title">Add</string>
+    <string name="add_qr">QR code</string>
+    <string name="add_qr_subtitle">Scan a subscription or VLESS</string>
+    <string name="add_link">Link</string>
+    <string name="add_link_subtitle">Paste vless:// or https://</string>
+    <string name="add_link_title">Add from link</string>
+    <string name="add_link_label">VLESS or subscription</string>
+    <string name="add_link_placeholder">vless://… or https://…</string>
+    <string name="add_saving">Saving…</string>
+    <string name="qr_empty">The QR code has no text</string>
+    <string name="qr_failed">Could not scan the QR code</string>
+
+    <string name="servers">Servers</string>
+    <string name="no_servers_yet">No servers yet</string>
+    <string name="no_servers_hint">Tap + to add one from a QR code or link.</string>
+    <string name="subscription_updated">Subscription updated</string>
+    <string name="subscription_update_failed">Could not update</string>
+    <string name="subscription_params">Subscription settings</string>
+    <string name="refresh_subscription">Refresh subscription</string>
+    <string name="delete_subscription">Delete subscription</string>
+    <string name="no_servers_in_subscription">This subscription has no servers yet</string>
+    <string name="params_saved">Settings saved</string>
+    <string name="save_failed">Could not save</string>
+    <string name="delete_server">Delete server</string>
+    <string name="delete_server_title">Delete server?</string>
+    <string name="delete_subscription_title">Delete subscription?</string>
+    <string name="delete_subscription_body">All servers from “%1$s” will be removed.</string>
+    <string name="server_params">Server settings</string>
+    <string name="field_note">Note</string>
+    <string name="field_note_placeholder">How it appears on Home</string>
+    <string name="field_name">Name</string>
+    <string name="field_address">Address</string>
+    <string name="field_port">Port</string>
+    <string name="no_servers_count">No servers</string>
+
+    <plurals name="server_count">
+        <item quantity="one">%d server</item>
+        <item quantity="other">%d servers</item>
+    </plurals>
+    <plurals name="minutes_count">
+        <item quantity="one">%d minute</item>
+        <item quantity="other">%d minutes</item>
+    </plurals>
+
+    <string name="apps_title">Apps</string>
+    <string name="apps_empty_title">No rules yet</string>
+    <string name="apps_empty_body">Without its own rule, an app follows domains: blocked sites go through the VPS, everything else is direct. Add a rule to send all of its traffic through the VPN or always bypass it.</string>
+    <string name="apps_add">Add app</string>
+    <string name="apps_search">Search by name</string>
+    <string name="apps_help_title">App rules</string>
+    <string name="apps_help_body">VPN — all of the app’s traffic goes through the VPS.\nDirect — the app never uses the VPN.\n\nWithout its own rule, the app follows domains:\nblocked sites go through the VPS,\neverything else is direct.</string>
+    <string name="apps_how_to_route">How should this app’s traffic be routed?</string>
+    <string name="rule_removed">Rule removed</string>
+    <string name="delete_rule">Delete rule</string>
+
+    <string name="domains_title">Domains</string>
+    <string name="domains_empty_title">No custom domains yet</string>
+    <string name="domains_empty_body">Add a domain and choose how its traffic is filtered.</string>
+    <string name="domains_help_title">Domain rules</string>
+    <string name="domains_help_body">Your rules override the automatic lists. The lists cannot be edited: to exclude a service, add your own domain. Cyrillic zones like .ру and .рф work too.</string>
+    <string name="domains_lists_heading">Downloaded lists via VPN:</string>
+    <string name="add_domain">Add domain</string>
+    <string name="domain_placeholder">youtube.com or сайт.ру</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_server">Server</string>
+    <string name="settings_auto_select">Automatic server selection</string>
+    <string name="settings_auto_select_on">Automatically pick the best available server.</string>
+    <string name="settings_auto_select_need_two">You need at least 2 servers for automatic selection</string>
+    <string name="settings_check_every">Check servers every</string>
+    <string name="settings_routing">Routing</string>
+    <string name="settings_auto_lists">Automatic VPN list</string>
+    <string name="settings_auto_lists_sub">YouTube, Telegram and other itdoginfo lists go through the VPS.</string>
+    <string name="settings_ipv6_sub">Turn this on if your network and server support it.</string>
+    <string name="settings_stability">Stability</string>
+    <string name="settings_logs">Logs and diagnostics</string>
+    <string name="settings_logs_sub">Send a report with secrets removed</string>
+    <string name="report_saved">Report saved: %1$s</string>
+    <string name="report_failed">Could not send the report</string>
+    <string name="settings_reset">Reset</string>
+    <string name="settings_reset_rules">Reset rules</string>
+    <string name="settings_reset_rules_sub">Deletes app and domain rules</string>
+    <string name="settings_reset_rules_button">Reset routing rules</string>
+    <string name="settings_reset_all">Reset everything</string>
+    <string name="settings_reset_all_sub">Disconnects the VPN and deletes the key and settings</string>
+    <string name="settings_reset_all_button">Reset all settings</string>
+    <string name="settings_reset_rules_title">Reset rules?</string>
+    <string name="settings_reset_rules_body">Apps and domains will return to smart routing.</string>
+    <string name="rules_reset">Rules reset</string>
+    <string name="always_on_info_body">This is an Android system mode. The app cannot turn it on by itself.\n\nIf you enable Always-on VPN for Layer, the system will bring the connection back after a reboot and will not let it simply disappear when the app is unloaded from memory.</string>
+    <string name="settings_reset_all_title">Reset all settings?</string>
+    <string name="settings_reset_all_body">The VPN will disconnect. The key, server and rules will be deleted.</string>
+    <string name="background_usage">Background usage</string>
+    <string name="battery_unrestricted">Unrestricted</string>
+    <string name="battery_optimized">It is set to Optimized. Choose Unrestricted, or Android may unload the VPN.</string>
+    <string name="battery_restricted">Disabled — turn on Allow background usage and choose Unrestricted.</string>
+    <string name="battery_settings">Battery settings</string>
+    <string name="always_on_hint">To bring the VPN back after a reboot, enable this in system settings.</string>
+    <string name="vpn_settings">VPN settings</string>
+    <string name="language">Language</string>
+    <string name="language_auto">Auto</string>
+    <string name="language_russian">Русский</string>
+    <string name="language_english">English</string>
+
+    <string name="navi_build">Build</string>
+    <string name="navi_app">App</string>
+    <string name="navi_package">Package</string>
+    <string name="navi_device">Device</string>
+    <string name="navi_operator">Operator</string>
+    <string name="navi_link_copied">Link copied</string>
+    <string name="navi_open_diagnostics">Open diagnostics</string>
+
+    <string name="diagnostics_title">Diagnostics</string>
+    <string name="diagnostics_empty_title">No events yet</string>
+    <string name="diagnostics_empty_body">Core, TUN, DNS and protect events. Secrets are not written. Send produces a full debug report.</string>
+    <string name="send_report_chooser">Send report</string>
+    <string name="report_subject">Layer report</string>
+    <string name="vpn_channel_description">VPN status</string>
+
+    <string name="error_generic">Error</string>
+    <string name="error_config">Configuration error</string>
+    <string name="error_config_singbox">sing-box configuration error</string>
+    <string name="subscription_no_vless">The subscription has no VLESS servers.</string>
+    <string name="subscription_not_found">Subscription not found.</string>
+    <string name="server_not_found">Server not found.</string>
+</resources>
