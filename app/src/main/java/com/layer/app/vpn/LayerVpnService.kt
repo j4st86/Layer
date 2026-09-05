@@ -371,10 +371,15 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         val missing = total - local.size
         dbg(
             when {
+                fetched.seededFromAssets > 0 && local.size == total ->
+                    "[RULE] списки из APK (${RuleSetCatalog.BUNDLED_RELEASE}), GitHub недоступен"
                 local.size == total -> "[RULE] списки доменов скачаны напрямую (${local.size})"
                 local.isEmpty() ->
                     "[RULE] списки доменов напрямую недоступны" +
                         (fetched.error?.let { ": $it" } ?: "")
+                fetched.seededFromAssets > 0 ->
+                    "[RULE] списки: ${local.size} (из них ${fetched.seededFromAssets} из APK), $missing нет" +
+                        (fetched.error?.let { " ($it)" } ?: "")
                 else ->
                     "[RULE] списки: ${local.size} напрямую, $missing нет" +
                         (fetched.error?.let { " ($it)" } ?: "")

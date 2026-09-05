@@ -11,10 +11,14 @@ data class AutomaticRuleSet(
 /**
  * Remote SRS lists from itdoginfo/allow-domains.
  * Their GitHub releases are weekly, so Layer refreshes every 3 days.
+ * A copy of [BUNDLED_RELEASE] ships in assets/rule-sets if GitHub is gone
+ * on first install. Refresh with scripts/fetch-rule-sets.sh.
  */
 object RuleSetCatalog {
     const val UPDATE_INTERVAL = "3d"
     const val FRESHNESS_MS = 3L * 24 * 60 * 60 * 1000
+    const val BUNDLED_RELEASE = "2026-08-31_16-18"
+    const val ASSET_DIR = "rule-sets"
     private const val BASE =
         "https://github.com/itdoginfo/allow-domains/releases/latest/download"
 

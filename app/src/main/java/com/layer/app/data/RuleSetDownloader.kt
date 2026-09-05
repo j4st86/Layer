@@ -11,15 +11,18 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 data class RuleSetDirectFetch(
     val files: Map<String, String>,
     val error: String? = null,
+    val seededFromAssets: Int = 0,
 )
 
 class RuleSetDownloader(context: Context) {
-    private val dir = File(context.filesDir, "sing-box/rule-sets")
+    private val app = context.applicationContext
+    private val dir = File(app.filesDir, "sing-box/rule-sets")
 
     fun existingLocalCopies(): Map<String, String> {
         dir.mkdirs()
@@ -32,6 +35,7 @@ class RuleSetDownloader(context: Context) {
     suspend fun ensureDirectCopies(network: Network?): RuleSetDirectFetch = withContext(Dispatchers.IO) {
         dir.mkdirs()
         val firstError = AtomicReference<String?>(null)
+        val seeded = AtomicInteger(0)
         val files = supervisorScope {
             RuleSetCatalog.vpnLists.map { set ->
                 async {
@@ -43,6 +47,10 @@ class RuleSetDownloader(context: Context) {
                     when {
                         error == null -> set.tag to file.absolutePath
                         usable -> set.tag to file.absolutePath
+                        copyFromAssets(set.tag, file) -> {
+                            seeded.incrementAndGet()
+                            set.tag to file.absolutePath
+                        }
                         else -> {
                             firstError.compareAndSet(null, error)
                             null
@@ -51,7 +59,27 @@ class RuleSetDownloader(context: Context) {
                 }
             }.awaitAll().filterNotNull().toMap()
         }
-        RuleSetDirectFetch(files = files, error = firstError.get())
+        RuleSetDirectFetch(
+            files = files,
+            error = firstError.get(),
+            seededFromAssets = seeded.get(),
+        )
+    }
+
+    private fun copyFromAssets(tag: String, destination: File): Boolean {
+        val assetPath = "${RuleSetCatalog.ASSET_DIR}/${fileName(tag)}"
+        return runCatching {
+            app.assets.open(assetPath).use { input ->
+                val tmp = File(destination.parentFile, destination.name + ".tmp")
+                tmp.outputStream().use { output -> input.copyTo(output) }
+                if (tmp.length() < MIN_BYTES) {
+                    tmp.delete()
+                    return false
+                }
+                if (destination.exists()) destination.delete()
+                tmp.renameTo(destination)
+            }
+        }.getOrDefault(false)
     }
 
     private fun download(url: String, destination: File, network: Network?): String? {
