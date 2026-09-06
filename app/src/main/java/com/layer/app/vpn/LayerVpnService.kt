@@ -444,29 +444,28 @@ class LayerVpnService : VpnService(), CommandServerHandler {
     fun recoverAfterIdle(reason: String, longIdleReload: Boolean = false) {
         if (stopping || commandServer == null) return
         val now = SystemClock.elapsedRealtime()
+        val connectivity = getSystemService(ConnectivityManager::class.java)
+        val hasNetwork = UnderlyingDns.pickUnderlyingNetwork(connectivity) != null
         val action = IdleRecoveryPolicy.decide(
             nowElapsed = now,
             startedElapsed = startedElapsed,
             lastRecoverElapsed = lastIdleRecoverElapsed,
             screenOffElapsed = lastScreenOffElapsed,
             longIdleReload = longIdleReload,
+            hasNetwork = hasNetwork,
         )
-        if (action == IdleRecoveryPolicy.Action.Skip) return
+        if (action == IdleRecoveryPolicy.Action.Skip) {
+            if (!hasNetwork) {
+                dbg("[VPN] recover skip no-network ($reason)")
+            }
+            return
+        }
         lastIdleRecoverElapsed = now
         if (longIdleReload) {
             lastScreenOffElapsed = 0L
         }
-        when (action) {
-            IdleRecoveryPolicy.Action.Wake -> {
-                dbg("[VPN] recover wake ($reason)")
-                runCatching { commandServer?.wake() }
-            }
-            IdleRecoveryPolicy.Action.Reload -> {
-                dbg("[VPN] recover reload after idle ($reason)")
-                scope.launch { reloadInternal() }
-            }
-            IdleRecoveryPolicy.Action.Skip -> Unit
-        }
+        dbg("[VPN] recover wake ($reason)")
+        runCatching { commandServer?.wake() }
     }
 
     private fun registerIdleRecovery() {

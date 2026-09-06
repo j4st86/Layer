@@ -19,6 +19,21 @@ class IdleRecoveryPolicyTest {
     }
 
     @Test
+    fun skipsWhenThereIsNoNetwork() {
+        assertEquals(
+            IdleRecoveryPolicy.Action.Skip,
+            IdleRecoveryPolicy.decide(
+                nowElapsed = 4 * 60 * 60 * 1000L,
+                startedElapsed = 1_000L,
+                lastRecoverElapsed = 0L,
+                screenOffElapsed = 30 * 60 * 1000L,
+                longIdleReload = true,
+                hasNetwork = false,
+            ),
+        )
+    }
+
+    @Test
     fun debouncesRepeatedScreenOn() {
         assertEquals(
             IdleRecoveryPolicy.Action.Skip,
@@ -47,9 +62,23 @@ class IdleRecoveryPolicyTest {
     }
 
     @Test
-    fun reloadsAfterLongIdle() {
+    fun wakesAfterAFewMinutesInAPocket() {
         assertEquals(
-            IdleRecoveryPolicy.Action.Reload,
+            IdleRecoveryPolicy.Action.Wake,
+            IdleRecoveryPolicy.decide(
+                nowElapsed = 5 * 60_000L,
+                startedElapsed = 1_000L,
+                lastRecoverElapsed = 0L,
+                screenOffElapsed = 60_000L,
+                longIdleReload = true,
+            ),
+        )
+    }
+
+    @Test
+    fun wakesAfterLongIdleInsteadOfReloadingTun() {
+        assertEquals(
+            IdleRecoveryPolicy.Action.Wake,
             IdleRecoveryPolicy.decide(
                 nowElapsed = 4 * 60 * 60 * 1000L,
                 startedElapsed = 1_000L,
@@ -61,9 +90,9 @@ class IdleRecoveryPolicyTest {
     }
 
     @Test
-    fun longIdleReloadIgnoresRecentWakeDebounce() {
+    fun longIdleStillRespectsDebounce() {
         assertEquals(
-            IdleRecoveryPolicy.Action.Reload,
+            IdleRecoveryPolicy.Action.Skip,
             IdleRecoveryPolicy.decide(
                 nowElapsed = 4 * 60 * 60 * 1000L,
                 startedElapsed = 1_000L,

@@ -10,7 +10,7 @@ object AutoServerPolicy {
     const val degradeRatio = 1.5
     const val failuresBeforeFullScan = 2
     const val cooldownMs = 120_000L
-    const val networkChangeDebounceMs = 1_500L
+    const val networkChangeDebounceMs = 5_000L
     const val idleIntervalStretch = 3
     const val idleMinIntervalMinutes = 60
 

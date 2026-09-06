@@ -258,6 +258,10 @@ class AutoServerSelector(
             log("оценка пропуск: VPN ${vpnController.status.value.state}")
             return
         }
+        if (underlyingNetwork() == null) {
+            log("оценка пропуск: нет сети")
+            return
+        }
         lastEvaluateElapsed = SystemClock.elapsedRealtime()
         mutex.withLock {
             val currentId = settings.activeServerId ?: run {

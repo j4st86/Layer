@@ -35,7 +35,8 @@ object UnderlyingDns {
 
     fun isUnderlying(caps: NetworkCapabilities): Boolean {
         return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN) &&
+            caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
     private fun rank(caps: NetworkCapabilities?): Int {
