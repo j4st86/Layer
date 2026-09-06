@@ -127,7 +127,9 @@
     <string name="settings_logs_sub">Отправить отчёт без секретов</string>
     <string name="settings_updates">Обновления</string>
     <string name="settings_check_updates">Проверить обновления</string>
-    <string name="settings_check_updates_sub">Установлена версия %1$s. GitHub проверяется автоматически раз в 7 дней.</string>
+    <string name="settings_check_updates_sub">Установлена версия %1$s</string>
+    <string name="settings_auto_updates">Автопроверка</string>
+    <string name="settings_auto_updates_sub">Проверять GitHub раз в 7 дней</string>
     <string name="update_checking">Проверка…</string>
     <string name="update_up_to_date">У вас последняя версия (%1$s)</string>
     <string name="update_available_title">Есть обновление</string>

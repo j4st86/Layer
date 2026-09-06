@@ -81,6 +81,7 @@ fun SettingsScreen() {
     val viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.factory(container))
     val snapshot by viewModel.snapshot.collectAsStateWithLifecycle()
     val updateUi by viewModel.updateUi.collectAsStateWithLifecycle()
+    val autoCheckEnabled by viewModel.autoCheckEnabled.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val settings = snapshot.settings
     val snackbar = remember { SnackbarHostState() }
@@ -227,25 +228,34 @@ fun SettingsScreen() {
 
             Text(stringResource(R.string.settings_updates), style = MaterialTheme.typography.titleMedium)
             TonalCard {
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.settings_check_updates)) },
-                    supportingContent = {
-                        Text(
-                            stringResource(
-                                R.string.settings_check_updates_sub,
-                                viewModel.installedVersion,
-                            ),
-                        )
-                    },
-                    leadingContent = { Icon(Icons.Outlined.SystemUpdateAlt, contentDescription = null) },
-                    trailingContent = {
-                        if (checking) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                        }
-                    },
-                    colors = listColors,
-                    modifier = Modifier.clickable(enabled = !checking, onClick = viewModel::checkForUpdate),
-                )
+                Column {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.settings_check_updates)) },
+                        supportingContent = {
+                            Text(
+                                stringResource(
+                                    R.string.settings_check_updates_sub,
+                                    viewModel.installedVersion,
+                                ),
+                            )
+                        },
+                        leadingContent = { Icon(Icons.Outlined.SystemUpdateAlt, contentDescription = null) },
+                        trailingContent = {
+                            if (checking) {
+                                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            }
+                        },
+                        colors = listColors,
+                        modifier = Modifier.clickable(enabled = !checking, onClick = viewModel::checkForUpdate),
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingSwitch(
+                        title = stringResource(R.string.settings_auto_updates),
+                        subtitle = stringResource(R.string.settings_auto_updates_sub),
+                        checked = autoCheckEnabled,
+                        onChecked = viewModel::setAutoCheckEnabled,
+                    )
+                }
             }
 
             TonalCard {

@@ -123,7 +123,9 @@
     <string name="settings_logs_sub">Send a report with secrets removed</string>
     <string name="settings_updates">Updates</string>
     <string name="settings_check_updates">Check for updates</string>
-    <string name="settings_check_updates_sub">Installed version %1$s. GitHub is checked automatically every 7 days.</string>
+    <string name="settings_check_updates_sub">Installed version %1$s</string>
+    <string name="settings_auto_updates">Automatic checks</string>
+    <string name="settings_auto_updates_sub">Check GitHub every 7 days</string>
     <string name="update_checking">Checking…</string>
     <string name="update_up_to_date">You have the latest version (%1$s)</string>
     <string name="update_available_title">Update available</string>

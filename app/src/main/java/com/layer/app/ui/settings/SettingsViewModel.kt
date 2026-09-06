@@ -36,6 +36,14 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     private val _updateUi = MutableStateFlow<UpdateUiState>(UpdateUiState.Idle)
     val updateUi: StateFlow<UpdateUiState> = _updateUi.asStateFlow()
 
+    private val _autoCheckEnabled = MutableStateFlow(container.updateChecker.isAutoCheckEnabled())
+    val autoCheckEnabled: StateFlow<Boolean> = _autoCheckEnabled.asStateFlow()
+
+    fun setAutoCheckEnabled(enabled: Boolean) {
+        container.updateChecker.setAutoCheckEnabled(enabled)
+        _autoCheckEnabled.value = enabled
+    }
+
     fun checkForUpdate() {
         if (_updateUi.value is UpdateUiState.Checking) return
         viewModelScope.launch {

@@ -25,7 +25,14 @@ class UpdateChecker(
 ) {
     private val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    fun isAutoCheckEnabled(): Boolean = prefs.getBoolean(KEY_AUTO_ENABLED, true)
+
+    fun setAutoCheckEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_ENABLED, enabled).apply()
+    }
+
     fun shouldAutoCheck(nowMs: Long = System.currentTimeMillis()): Boolean {
+        if (!isAutoCheckEnabled()) return false
         val last = prefs.getLong(KEY_LAST_CHECK_MS, 0L)
         return last <= 0L || nowMs - last >= INTERVAL_MS
     }
@@ -76,5 +83,6 @@ class UpdateChecker(
         private const val PREFS = "layer_updates"
         private const val KEY_LAST_CHECK_MS = "last_check_ms"
         private const val KEY_DISMISSED = "dismissed_version"
+        private const val KEY_AUTO_ENABLED = "auto_check_enabled"
     }
 }
