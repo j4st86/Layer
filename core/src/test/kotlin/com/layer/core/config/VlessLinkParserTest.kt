@@ -99,7 +99,7 @@ class VlessLinkParserTest {
             "vless://$sampleUuid@203.0.113.10:443?encryption=none" +
                 "&extra=%7B%22mode%22%3A%22auto%22%2C%22xPaddingBytes%22%3A%22100-1000%22%7D" +
                 "&fp=edge&host=www.example.com&mode=auto&path=%2F" +
-                "&pbk=jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0" +
+                "&pbk=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
                 "&security=reality&sid=abcd1234&sni=www.example.com" +
                 "&spx=%2F&type=xhttp&x_padding_bytes=100-1000#XHTTP"
         val server = VlessLinkParser.parse(link).getOrThrow().server!!

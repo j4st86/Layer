@@ -25,7 +25,7 @@ class BoxLogFilterTest {
             BoxLogFilter.keep(
                 "error",
                 "connection: open connection to 149.154.167.50:443 using outbound/vless[proxy]: " +
-                    "dial tcp 213.21.237.173:443: operation was canceled",
+                    "dial tcp 203.0.113.1:443: operation was canceled",
             ),
         )
         assertTrue(
@@ -42,12 +42,12 @@ class BoxLogFilterTest {
         val fp = BoxLogFilter.fingerprint(
             "error",
             "[7612] [4133356062 10ms] connection: open connection to 149.154.167.41:443 " +
-                "using outbound/vless[proxy]: dial tcp 213.21.237.173:443: operation was canceled",
+                "using outbound/vless[proxy]: dial tcp 203.0.113.1:443: operation was canceled",
         )
         val same = BoxLogFilter.fingerprint(
             "error",
             "[7612] [1795397205 10ms] connection: open connection to 149.154.167.51:443 " +
-                "using outbound/vless[proxy]: dial tcp 213.21.237.173:443: operation was canceled",
+                "using outbound/vless[proxy]: dial tcp 203.0.113.1:443: operation was canceled",
         )
         assertEquals(fp, same)
         assertEquals(BoxLogRateLimiter.Decision.Emit, limiter.allow(fp, 0L))

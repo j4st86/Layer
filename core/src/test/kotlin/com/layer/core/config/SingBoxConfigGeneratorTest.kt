@@ -218,7 +218,7 @@ class SingBoxConfigGeneratorTest {
                     serverName = "www.example.com",
                     fingerprint = "chrome",
                     security = "reality",
-                    publicKey = "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0",
+                    publicKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                     shortId = "abcd1234efgh",
                     spiderX = "/",
                 ),
@@ -229,7 +229,7 @@ class SingBoxConfigGeneratorTest {
         ).json
         assertTrue(json.contains("\"reality\""))
         assertTrue(json.contains("www.example.com"))
-        assertTrue(json.contains("jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0"))
+        assertTrue(json.contains("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"))
         assertFalse(json.contains("\"alpn\""))
         assertFalse(json.contains("spider_x"))
     }
@@ -244,7 +244,7 @@ class SingBoxConfigGeneratorTest {
                     serverName = "www.example.com",
                     fingerprint = "",
                     security = "reality",
-                    publicKey = "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0",
+                    publicKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                     shortId = "abcd1234efgh",
                 ),
             ),
@@ -289,7 +289,7 @@ class SingBoxConfigGeneratorTest {
                     serverName = "www.example.com",
                     fingerprint = "edge",
                     security = "reality",
-                    publicKey = "jNXHt1yRo0vDuchQlIP6Z0ZvjT3KtzVI-T4E7RoLJS0",
+                    publicKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
                     shortId = "abcd1234",
                     network = "xhttp",
                     flow = "xtls-rprx-vision",
