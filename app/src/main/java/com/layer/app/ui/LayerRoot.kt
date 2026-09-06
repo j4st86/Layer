@@ -24,9 +24,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -46,6 +49,8 @@ import com.layer.app.ui.diagnostics.DiagnosticsScreen
 import com.layer.app.ui.domains.DomainsScreen
 import com.layer.app.ui.home.HomeScreen
 import com.layer.app.ui.settings.SettingsScreen
+import com.layer.app.ui.update.UpdateAvailableDialog
+import com.layer.app.data.UpdateCheckResult
 import com.layer.core.util.HiddenTapGate
 import com.layer.core.util.HiddenTapResult
 import kotlinx.coroutines.launch
@@ -90,6 +95,15 @@ fun LayerRoot(container: AppContainer) {
     val currentRoute = backStack?.destination?.route
     val showTabs = currentRoute == Routes.Home
     val tabs = rememberTabs()
+    var autoUpdate by remember { mutableStateOf<UpdateCheckResult.Available?>(null) }
+    LaunchedEffect(Unit) {
+        val checker = container.updateChecker
+        if (!checker.shouldAutoCheck()) return@LaunchedEffect
+        val result = checker.check(force = false)
+        if (result is UpdateCheckResult.Available && checker.shouldPrompt(result.latest)) {
+            autoUpdate = result
+        }
+    }
 
     CompositionLocalProvider(LocalAppContainer provides container) {
         Scaffold(
@@ -153,6 +167,16 @@ fun LayerRoot(container: AppContainer) {
                     )
                 }
             }
+        }
+        autoUpdate?.let { update ->
+            UpdateAvailableDialog(
+                update = update,
+                onDismiss = { autoUpdate = null },
+                onLater = {
+                    container.updateChecker.rememberDismissed(update.latest)
+                    autoUpdate = null
+                },
+            )
         }
     }
 }

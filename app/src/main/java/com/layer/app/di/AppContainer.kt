@@ -4,6 +4,7 @@ import android.content.Context
 import com.layer.app.data.LayerDataStore
 import com.layer.app.data.LayerRepository
 import com.layer.app.data.SecureCredentialsStore
+import com.layer.app.data.UpdateChecker
 import com.layer.app.diagnostics.DiagnosticLog
 import com.layer.app.vpn.AutoServerSelector
 import com.layer.app.vpn.ConnectionPing
@@ -24,4 +25,5 @@ class AppContainer(context: Context) {
         diagnostics,
         connectionPing,
     )
+    val updateChecker = UpdateChecker(appContext)
 }

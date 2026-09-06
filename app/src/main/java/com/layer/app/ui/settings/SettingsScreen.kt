@@ -24,10 +24,12 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.RestartAlt
+import androidx.compose.material.icons.outlined.SystemUpdateAlt
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
@@ -46,6 +48,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -65,6 +68,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.layer.app.ui.LocalAppContainer
 import com.layer.app.ui.components.TonalCard
+import com.layer.app.ui.update.UpdateAvailableDialog
 import com.layer.app.vpn.BackgroundKeepAlive
 import com.layer.app.diagnostics.DiagnosticReport
 import com.layer.core.config.AutoServerPolicy
@@ -76,6 +80,7 @@ fun SettingsScreen() {
     val container = LocalAppContainer.current
     val viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.factory(container))
     val snapshot by viewModel.snapshot.collectAsStateWithLifecycle()
+    val updateUi by viewModel.updateUi.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val settings = snapshot.settings
     val snackbar = remember { SnackbarHostState() }
@@ -88,12 +93,18 @@ fun SettingsScreen() {
     var keepAlive by remember { mutableStateOf(BackgroundKeepAlive.status(context)) }
     var language by remember { mutableStateOf(AppLanguagePreferences.get(context)) }
     val listColors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+    val checking = updateUi is UpdateUiState.Checking
     val canAutoSelect = AutoServerPolicy.canEnable(settings.servers.size)
     val autoEnabled = settings.autoSelectServerEnabled && canAutoSelect
     val intervalEnabled = autoEnabled
     LifecycleResumeEffect(Unit) {
         keepAlive = BackgroundKeepAlive.status(context)
         onPauseOrDispose { }
+    }
+    LaunchedEffect(updateUi) {
+        val notice = updateUi as? UpdateUiState.Notice ?: return@LaunchedEffect
+        snackbar.showSnackbar(notice.text)
+        viewModel.dismissUpdateNotice()
     }
 
     Scaffold(
@@ -213,6 +224,29 @@ fun SettingsScreen() {
                 onAlwaysOnInfo = { showAlwaysOnInfo = true },
                 onOpenBatterySettings = { BackgroundKeepAlive.requestFix(context) },
             )
+
+            Text(stringResource(R.string.settings_updates), style = MaterialTheme.typography.titleMedium)
+            TonalCard {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_check_updates)) },
+                    supportingContent = {
+                        Text(
+                            stringResource(
+                                R.string.settings_check_updates_sub,
+                                viewModel.installedVersion,
+                            ),
+                        )
+                    },
+                    leadingContent = { Icon(Icons.Outlined.SystemUpdateAlt, contentDescription = null) },
+                    trailingContent = {
+                        if (checking) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        }
+                    },
+                    colors = listColors,
+                    modifier = Modifier.clickable(enabled = !checking, onClick = viewModel::checkForUpdate),
+                )
+            }
 
             TonalCard {
                 ListItem(
@@ -350,6 +384,14 @@ fun SettingsScreen() {
                 }) { Text(stringResource(R.string.settings_reset_all)) }
             },
             dismissButton = { TextButton(onClick = { confirmResetAll = false }) { Text(stringResource(R.string.action_cancel)) } },
+        )
+    }
+    val updatePrompt = updateUi as? UpdateUiState.Prompt
+    if (updatePrompt != null) {
+        UpdateAvailableDialog(
+            update = updatePrompt.update,
+            onDismiss = { viewModel.dismissUpdatePrompt(remember = false, latest = updatePrompt.update.latest) },
+            onLater = { viewModel.dismissUpdatePrompt(remember = true, latest = updatePrompt.update.latest) },
         )
     }
 }
