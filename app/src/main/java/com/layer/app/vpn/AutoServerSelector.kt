@@ -57,6 +57,7 @@ class AutoServerSelector(
     private var networkJob: Job? = null
     private var wakeJob: Job? = null
     private var lastEvaluateElapsed = 0L
+    private var lastNetworkChangeElapsed = 0L
 
     init {
         scope.launch {
@@ -178,6 +179,7 @@ class AutoServerSelector(
         }
         val from = lastTransportKind
         lastTransportKind = kind
+        lastNetworkChangeElapsed = SystemClock.elapsedRealtime()
         log("сеть ${transportLabel(from)} → ${transportLabel(kind)}, debounce ${AutoServerPolicy.networkChangeDebounceMs} ms")
         networkJob?.cancel()
         networkJob = scope.launch {
@@ -192,8 +194,8 @@ class AutoServerSelector(
                 log("смена сети пропуск: VPN ${vpnController.status.value.state}")
                 return@launch
             }
-            log("смена сети: полная оценка")
-            evaluateConnected(fullScan = true)
+            log("смена сети: проверка текущего")
+            evaluateConnected(fullScan = false)
         }
     }
 
@@ -214,7 +216,8 @@ class AutoServerSelector(
             } else {
                 SystemClock.elapsedRealtime() - lastEvaluateElapsed
             }
-            if (ago < intervalMs) {
+            val suspect = currentIsSuspect(snap)
+            if (ago < intervalMs && !suspect) {
                 log("экран включён, недавняя проверка ${ago / 1000} с назад")
                 return@launch
             }
@@ -273,28 +276,36 @@ class AutoServerSelector(
                 return@withLock
             }
             val network = underlyingNetwork()
+            val settling = AutoServerPolicy.isNetworkSettling(
+                SystemClock.elapsedRealtime(),
+                lastNetworkChangeElapsed,
+            )
             log(
                 "оценка current=${current.visibleName()} fullScan=$fullScan " +
-                    "lastGood=${fmtMs(lastGoodCurrentMs)} cooldown=${cooldownLeftMs()} ms " +
+                    "ewma=${fmtMs(lastGoodCurrentMs)} cooldown=${cooldownLeftMs()} ms " +
+                    "settling=$settling " +
                     "bind=${if (network != null) "underlying" else "default"}",
             )
-            var currentMs = VlessTcpProbe.measureMedian(current, network, diagnostics)
-            remember(currentId, currentMs)
             val previousGood = lastGoodCurrentMs
-            if (currentMs != null) {
-                val degraded = previousGood != null && AutoServerPolicy.isDegraded(currentMs, previousGood)
-                if (degraded) {
-                    log(
-                        "текущий ухудшился ${current.visibleName()} ${currentMs} ms " +
-                            "против lastGood ${previousGood} ms, повторная проверка",
-                    )
-                    currentMs = VlessTcpProbe.measureMedian(current, network, diagnostics)
-                    remember(currentId, currentMs)
-                }
+            var currentMs = VlessTcpProbe.measureMedian(current, network, diagnostics)
+            val firstDegraded = currentMs != null &&
+                previousGood != null &&
+                AutoServerPolicy.isDegraded(currentMs, previousGood)
+            if (currentMs == null) {
+                log("текущий не ответил ${current.visibleName()}, повторная проверка")
+                currentMs = VlessTcpProbe.measureMedian(current, network, diagnostics)
+            } else if (firstDegraded) {
+                log(
+                    "текущий ухудшился ${current.visibleName()} ${currentMs} ms " +
+                        "против ewma ${previousGood} ms, повторная проверка",
+                )
+                currentMs = VlessTcpProbe.measureMedian(current, network, diagnostics)
             }
+            remember(currentId, currentMs)
             if (currentMs != null) {
-                val degraded = previousGood != null && AutoServerPolicy.isDegraded(currentMs, previousGood)
-                if (!degraded) lastGoodCurrentMs = currentMs
+                lastGoodCurrentMs = AutoServerPolicy.ewma(previousGood, currentMs)
+                val degraded = previousGood != null &&
+                    AutoServerPolicy.isDegraded(currentMs, previousGood)
                 _status.value = _status.value.copy(latencyMs = currentMs)
                 connectionPing.publishFromAutoSelect(currentMs)
                 if (!fullScan && !degraded) {
@@ -307,6 +318,15 @@ class AutoServerSelector(
             } else {
                 _status.value = _status.value.copy(latencyMs = null)
                 connectionPing.publishFromAutoSelect(null)
+                val failures = memory[currentId]?.consecutiveFailures ?: 1
+                if (settling || !AutoServerPolicy.shouldFailover(failures)) {
+                    log(
+                        "текущий недоступен ${current.visibleName()} " +
+                            "($failures/${AutoServerPolicy.failuresBeforeFullScan})" +
+                            (if (settling) ", ждём после смены сети" else ", не переключаем"),
+                    )
+                    return@withLock
+                }
                 log("текущий недоступен ${current.visibleName()}, ищем другой")
             }
             val others = settings.servers.filter { it.id != currentId }
@@ -336,7 +356,8 @@ class AutoServerSelector(
                 val need = (baseline * (1.0 - AutoServerPolicy.switchImprovementRatio)).toLong()
                 log(
                     "не переключаем: ${nameOf(settings, candidate.key)} ${candidate.value} ms " +
-                        "против текущих ${baseline} ms, нужно < $need ms (20%)",
+                        "против текущих ${baseline} ms, нужно < $need ms (20%) " +
+                        "и быстрее на ${AutoServerPolicy.minSwitchDeltaMs} ms",
                 )
                 return@withLock
             }
@@ -347,11 +368,20 @@ class AutoServerSelector(
                 )
                 return@withLock
             }
+            if (VpnStatusStore.hasRecentTraffic()) {
+                log(
+                    "кандидат лучше ${nameOf(settings, candidate.key)} ${candidate.value} ms, " +
+                        "но TUN недавно вёл трафик — не переключаем",
+                )
+                return@withLock
+            }
             log(
                 "кандидат лучше: ${nameOf(settings, candidate.key)} ${candidate.value} ms " +
-                    "против ${current.visibleName()} ${baseline} ms",
+                    "против ${current.visibleName()} ${baseline} ms, подтверждение",
             )
-            switchTo(settings, candidate.key, candidate.value, force = false)
+            val confirmed = confirmSoftSwitch(current, candidate.key, settings, network)
+            if (confirmed == null) return@withLock
+            switchTo(settings, confirmed.first, confirmed.second, force = false)
         }
     }
 
@@ -359,6 +389,47 @@ class AutoServerSelector(
         val measured = VlessTcpProbe.measureAll(servers, underlyingNetwork(), diagnostics)
         measured.forEach { (id, ms) -> remember(id, ms) }
         return measured.mapNotNull { (id, ms) -> ms?.let { id to it } }.toMap()
+    }
+
+    private suspend fun confirmSoftSwitch(
+        current: SavedServer,
+        candidateId: String,
+        settings: LayerSettings,
+        network: Network?,
+    ): Pair<String, Long>? {
+        val candidate = settings.servers.find { it.id == candidateId } ?: return null
+        val currentMs = VlessTcpProbe.measureMedian(current, network, diagnostics)
+        remember(current.id, currentMs)
+        val candidateMs = VlessTcpProbe.measureMedian(candidate, network, diagnostics)
+        remember(candidate.id, candidateMs)
+        if (currentMs == null) {
+            log("подтверждение: текущий снова не ответил, оставляем до failover")
+            return null
+        }
+        lastGoodCurrentMs = AutoServerPolicy.ewma(lastGoodCurrentMs, currentMs)
+        _status.value = _status.value.copy(latencyMs = currentMs)
+        connectionPing.publishFromAutoSelect(currentMs)
+        if (candidateMs == null) {
+            log("подтверждение: кандидат ${candidate.visibleName()} не ответил")
+            return null
+        }
+        if (!AutoServerPolicy.shouldSwitch(currentMs, candidateMs)) {
+            log(
+                "подтверждение: разрыв исчез ${current.visibleName()} ${currentMs} ms " +
+                    "против ${candidate.visibleName()} ${candidateMs} ms",
+            )
+            return null
+        }
+        if (VpnStatusStore.hasRecentTraffic()) {
+            log("подтверждение: TUN снова вёл трафик — не переключаем")
+            return null
+        }
+        return candidate.id to candidateMs
+    }
+
+    private fun currentIsSuspect(settings: LayerSettings): Boolean {
+        val id = settings.activeServerId ?: return false
+        return (memory[id]?.consecutiveFailures ?: 0) > 0
     }
 
     private suspend fun switchTo(

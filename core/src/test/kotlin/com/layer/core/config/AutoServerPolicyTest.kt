@@ -22,16 +22,44 @@ class AutoServerPolicyTest {
     }
 
     @Test
-    fun switchesOnlyWhenTwentyPercentBetter() {
+    fun switchesOnlyWhenTwentyPercentAndSixtyMsBetter() {
         assertFalse(AutoServerPolicy.shouldSwitch(50, 46))
-        assertTrue(AutoServerPolicy.shouldSwitch(100, 70))
+        assertFalse(AutoServerPolicy.shouldSwitch(100, 70))
         assertFalse(AutoServerPolicy.shouldSwitch(100, 85))
+        assertFalse(AutoServerPolicy.shouldSwitch(120, 70))
+        assertFalse(AutoServerPolicy.shouldSwitch(101, 53))
+        assertTrue(AutoServerPolicy.shouldSwitch(150, 70))
+        assertTrue(AutoServerPolicy.shouldSwitch(101, 40))
     }
 
     @Test
-    fun detectsDegradedLatency() {
+    fun ignoresDegradeWhenStillGoodEnough() {
         assertFalse(AutoServerPolicy.isDegraded(60, 50))
-        assertTrue(AutoServerPolicy.isDegraded(80, 50))
+        assertFalse(AutoServerPolicy.isDegraded(80, 50))
+        assertTrue(AutoServerPolicy.isDegraded(130, 50))
+        assertTrue(AutoServerPolicy.isGoodEnough(80))
+        assertFalse(AutoServerPolicy.isGoodEnough(81))
+    }
+
+    @Test
+    fun ewmaMovesTowardSampleWithoutStickingToTheMinimum() {
+        assertEquals(26L, AutoServerPolicy.ewma(null, 26))
+        assertEquals(49L, AutoServerPolicy.ewma(26, 101))
+        assertEquals(52L, AutoServerPolicy.ewma(50, 55))
+    }
+
+    @Test
+    fun failoversAfterTwoMisses() {
+        assertFalse(AutoServerPolicy.shouldFailover(0))
+        assertFalse(AutoServerPolicy.shouldFailover(1))
+        assertTrue(AutoServerPolicy.shouldFailover(2))
+    }
+
+    @Test
+    fun settlingWindowBlocksForceSwitchAfterNetworkChange() {
+        assertFalse(AutoServerPolicy.isNetworkSettling(10_000L, 0L))
+        assertTrue(AutoServerPolicy.isNetworkSettling(20_000L, 10_000L))
+        assertFalse(AutoServerPolicy.isNetworkSettling(50_000L, 10_000L))
     }
 
     @Test

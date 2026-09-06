@@ -61,6 +61,9 @@ class SingBoxLogBridge(private val diagnostics: DiagnosticLog) : CommandClientHa
 
     override fun writeStatus(message: StatusMessage?) {
         if (message == null) return
+        if (message.uplink > 0L || message.downlink > 0L) {
+            VpnStatusStore.noteTraffic()
+        }
         val now = System.currentTimeMillis()
         if (now - lastStatMs < 8_000L) return
         lastStatMs = now

@@ -342,6 +342,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         container.autoServerSelector.stopMonitoring()
         container.connectionPing.clear()
         unregisterIdleRecovery()
+        VpnStatusStore.clearTraffic()
         VpnStatusStore.update(VpnUiStatus(VpnConnectionState.DISCONNECTED, getString(R.string.status_disconnected_short)))
         runCatching { logClient?.disconnect() }
         runCatching { commandServer?.closeService() }
@@ -411,6 +412,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         container.autoServerSelector.stopMonitoring()
         container.connectionPing.clear()
         unregisterIdleRecovery()
+        VpnStatusStore.clearTraffic()
         VpnStatusStore.update(
             VpnUiStatus(
                 state = VpnConnectionState.ERROR,

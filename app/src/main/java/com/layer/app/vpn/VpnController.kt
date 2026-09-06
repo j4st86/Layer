@@ -3,7 +3,9 @@ package com.layer.app.vpn
 import android.content.Context
 import android.content.Intent
 import android.net.VpnService
+import android.os.SystemClock
 import com.layer.app.R
+import com.layer.core.config.AutoServerPolicy
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -13,8 +15,25 @@ object VpnStatusStore {
     private val _status = MutableStateFlow(VpnUiStatus())
     val status: StateFlow<VpnUiStatus> = _status.asStateFlow()
 
+    @Volatile
+    var lastTrafficElapsed: Long = 0L
+        private set
+
     fun update(status: VpnUiStatus) {
         _status.value = status
+    }
+
+    fun noteTraffic() {
+        lastTrafficElapsed = SystemClock.elapsedRealtime()
+    }
+
+    fun clearTraffic() {
+        lastTrafficElapsed = 0L
+    }
+
+    fun hasRecentTraffic(windowMs: Long = AutoServerPolicy.trafficQuietMs): Boolean {
+        if (lastTrafficElapsed <= 0L) return false
+        return SystemClock.elapsedRealtime() - lastTrafficElapsed <= windowMs
     }
 }
 
