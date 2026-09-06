@@ -5,13 +5,13 @@
 <h1 align="center">Layer</h1>
 
 <p align="center">
-  <strong>English</strong> ·
-  <a href="README.ru.md">Русский</a>
+  <a href="README.en.md">English</a> ·
+  <strong>Русский</strong>
 </p>
 
 <p align="center">
-  <strong>Android VPN client with smart routing</strong><br>
-  Not a VPN provider: bring your own <code>vless://</code> link or subscription, and your own VPS.
+  <strong>VPN-клиент с умной маршрутизацией для Android</strong><br>
+  Не провайдер доступа: свой <code>vless://</code> или подписка, свой VPS.
 </p>
 
 <p align="center">
@@ -21,67 +21,67 @@
   <img src="https://img.shields.io/badge/arch-arm64-868E96?style=flat-square" alt="arm64">
 </p>
 
-Layer is a VPN client for a server you already have. By default traffic goes **direct**. Only sites from the automatic lists, apps you send through the VPN, and your own domains use VLESS.
+Layer — VPN-клиент под свой сервер. По умолчанию интернет идёт **напрямую**. Через VLESS уходят сайты из автоматических списков, приложения, которые вы сами отправили в VPN, и свои домены.
 
-The lists target services that are often blocked in Russia: YouTube, Telegram, Instagram, and the rest of [itdoginfo](https://github.com/itdoginfo/allow-domains). Banking, government sites, and LAN traffic stay off the VPS.
+Списки рассчитаны на то, что обычно недоступно из России: YouTube, Telegram, Instagram и остальное из [itdoginfo](https://github.com/itdoginfo/allow-domains). Банк, госуслуги и локальная сеть через VPS не идут.
 
-This is a pet project, not a key shop. You need your own `vless://` link or subscription. There is no UUID in the repo.
+Пет-проект, не магазин ключей: нужен свой `vless://` или подписка. UUID в репозитории нет.
 
-## Why
+## Зачем это
 
-Many clients can split-tunnel. Layer is tuned for Russia: ready-made lists, per-app and per-domain rules, and your own VLESS.
+Split-туннель есть у многих клиентов. Layer заточен под Россию: готовые списки, правила на приложения и домены, свой VLESS.
 
-- **Smart routing by default.** App rules first, then your domains, then [itdoginfo/allow-domains](https://github.com/itdoginfo/allow-domains), then direct.
-- **Your own key.** Import a `vless://` link or an HTTPS subscription from a QR code or the clipboard. Reality, TLS, Vision, WebSocket, gRPC, XHTTP.
-- **Several servers.** Manual nodes and subscriptions, notes, auto-pick of a working server.
-- **Always-on.** Android brings the VPN back after a reboot if you enable it in system settings.
-- **Russian and English.** Pin a language or follow the system.
+- **Умная маршрутизация по умолчанию.** Сначала правила приложений, затем ваши домены, затем списки [itdoginfo/allow-domains](https://github.com/itdoginfo/allow-domains), и только потом — прямой выход.
+- **Свой ключ.** Импорт `vless://` или HTTPS-подписки с QR или из буфера. Reality, TLS, Vision, WebSocket, gRPC, XHTTP.
+- **Несколько серверов.** Ручные узлы и подписки, заметки, автовыбор живого сервера.
+- **Always-on.** Система поднимает VPN после перезагрузки, если включить это в настройках Android.
+- **Русский и English.** Язык можно зафиксировать или оставить как у системы.
 
 ```text
-app: VPN / Direct               ← always wins
-        ↓ if Smart or no rule
-your domain: VPN / Direct
-        ↓ if none
-itdoginfo list (YouTube, Telegram, …)
-        ↓ if none
-direct
+приложение: VPN / Direct        ← всегда побеждает
+        ↓ если Smart или нет правила
+свой домен: VPN / Direct
+        ↓ если нет
+список itdoginfo (YouTube, Telegram, …)
+        ↓ если нет
+напрямую
 ```
 
-## Features
+## Что умеет
 
-- Native client: Kotlin, Jetpack Compose, Android `VpnService`, [sing-box](https://github.com/SagerNet/sing-box) (libbox)
-- Automatic lists: YouTube, Telegram, Instagram / Facebook, X, Discord, TikTok, Google AI, Google Play, Cloudflare, foreign media, HDRezka, geoblock
-- App rules: send all of an app’s traffic through the VPN, or always bypass it
-- Custom domains, including zones like `.рф`
-- Diagnostics with secrets stripped from logs; reports go to Downloads
-- **arm64** phones only. x86 emulators and 32-bit devices are not supported
+- Нативный клиент: Kotlin, Jetpack Compose, Android `VpnService`, ядро [sing-box](https://github.com/SagerNet/sing-box) (libbox)
+- Автосписки: YouTube, Telegram, Instagram / Facebook, X, Discord, TikTok, Google AI, Google Play, Cloudflare, зарубежные СМИ, HDRezka, геоблок
+- Правила приложений: весь трафик программы в VPN или всегда мимо
+- Свои домены, в том числе зоны вроде `.рф`
+- Диагностика без секретов в логах, отчёт в Downloads
+- Только **arm64** (обычные телефоны). Эмулятор x86 и 32-битные устройства не поддерживаются
 
-## Install
+## Установка
 
-1. Download the APK from [Releases](https://github.com/j4st86/Layer/releases/latest).
-2. Allow installs from the browser / GitHub.
-3. Add a server with **+** on the home screen.
-4. Optional: Settings → VPN → Layer → Always-on VPN.
+1. Скачайте APK с [Releases](https://github.com/j4st86/Layer/releases/latest).
+2. Разрешите установку из браузера / GitHub.
+3. Добавьте сервер кнопкой **+** на главном экране.
+4. По желанию: Настройки → VPN → Layer → «Всегда включённый VPN».
 
-Keys and subscriptions stay on the phone.
+Ключи и подписка живут только на телефоне.
 
-## Build
+## Сборка
 
-`libbox.aar` is not in git. Build it locally:
+`libbox.aar` в git нет — его нужно собрать локально.
 
 ```bash
 ./scripts/build-libbox.sh
 ./gradlew :core:test :app:assembleRelease
 ```
 
-You need JDK 17, Android SDK 36, Go 1.25+, and NDK 28. The script builds slim sing-box **v1.14.0** (TUN, VLESS, Reality/uTLS, gVisor), without QUIC, WireGuard, Tailscale, or Naive.
+Нужны JDK 17, Android SDK 36, Go 1.25+ и NDK 28. Скрипт собирает slim sing-box **v1.14.0** (TUN, VLESS, Reality/uTLS, gVisor), без QUIC, WireGuard, Tailscale и Naive.
 
-Release signing reads local `keystore.properties` (see `keystore.properties.example`). The keystore is not in the repo.
+Подпись release читается из локального `keystore.properties` (см. `keystore.properties.example`). Файл ключа в репозиторий не кладётся.
 
 ## Always-on VPN
 
-Android only: **Network & internet → VPN → Layer → Always-on VPN**. The app cannot flip that switch itself.
+Включается только системой: **Сеть и интернет → VPN → Layer → Всегда включённый VPN**. Приложение само этот переключатель не ставит.
 
-## License
+## Лицензия
 
-[GNU GPL v3](LICENSE). The VPN core is sing-box / libbox, also GPL-3.0; linking it requires the same license for Layer.
+[GNU GPL v3](LICENSE). Ядро — sing-box / libbox, тоже GPL-3.0; из-за линковки тот же тип лицензии обязателен и для Layer.
