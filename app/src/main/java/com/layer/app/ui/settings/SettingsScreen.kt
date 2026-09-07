@@ -219,6 +219,7 @@ fun SettingsScreen() {
             Text(stringResource(R.string.settings_stability), style = MaterialTheme.typography.titleMedium)
             StabilityChecklist(
                 keepAlive = keepAlive,
+                xiaomiFamily = BackgroundKeepAlive.isXiaomiFamily(context),
                 onOpenVpnSettings = {
                     runCatching { context.startActivity(Intent(Settings.ACTION_VPN_SETTINGS)) }
                 },
@@ -436,6 +437,7 @@ private fun SettingSwitch(
 @Composable
 private fun StabilityChecklist(
     keepAlive: BackgroundKeepAlive.Status,
+    xiaomiFamily: Boolean,
     onOpenVpnSettings: () -> Unit,
     onAlwaysOnInfo: () -> Unit,
     onOpenBatterySettings: () -> Unit,
@@ -451,9 +453,18 @@ private fun StabilityChecklist(
                 ok = keepAlive == BackgroundKeepAlive.Status.UNRESTRICTED,
                 title = stringResource(R.string.background_usage),
                 subtitle = when (keepAlive) {
-                    BackgroundKeepAlive.Status.UNRESTRICTED -> stringResource(R.string.battery_unrestricted)
-                    BackgroundKeepAlive.Status.OPTIMIZED -> stringResource(R.string.battery_optimized)
-                    BackgroundKeepAlive.Status.RESTRICTED -> stringResource(R.string.battery_restricted)
+                    BackgroundKeepAlive.Status.UNRESTRICTED -> stringResource(
+                        if (xiaomiFamily) R.string.battery_unrestricted_xiaomi
+                        else R.string.battery_unrestricted,
+                    )
+                    BackgroundKeepAlive.Status.OPTIMIZED -> stringResource(
+                        if (xiaomiFamily) R.string.battery_optimized_xiaomi
+                        else R.string.battery_optimized,
+                    )
+                    BackgroundKeepAlive.Status.RESTRICTED -> stringResource(
+                        if (xiaomiFamily) R.string.battery_restricted_xiaomi
+                        else R.string.battery_restricted,
+                    )
                 },
                 actionLabel = stringResource(R.string.battery_settings),
                 onAction = onOpenBatterySettings,

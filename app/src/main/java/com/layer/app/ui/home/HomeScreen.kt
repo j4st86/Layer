@@ -134,6 +134,7 @@ fun HomeScreen() {
             Column {
                 if (keepAlive != BackgroundKeepAlive.Status.UNRESTRICTED) {
                     UnrestrictedBatterySnackbar(
+                        xiaomiFamily = BackgroundKeepAlive.isXiaomiFamily(context),
                         onOpenSettings = { BackgroundKeepAlive.requestFix(context) },
                     )
                 }
@@ -488,6 +489,7 @@ private fun StatusBubble(
 
 @Composable
 private fun UnrestrictedBatterySnackbar(
+    xiaomiFamily: Boolean,
     onOpenSettings: () -> Unit,
 ) {
     Snackbar(
@@ -503,7 +505,11 @@ private fun UnrestrictedBatterySnackbar(
             ) { Text(stringResource(R.string.action_open)) }
         },
     ) {
-        Text(stringResource(R.string.battery_snackbar))
+        Text(
+            stringResource(
+                if (xiaomiFamily) R.string.battery_snackbar_xiaomi else R.string.battery_snackbar,
+            ),
+        )
     }
 }
 

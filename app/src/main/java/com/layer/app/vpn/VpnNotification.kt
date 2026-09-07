@@ -36,10 +36,12 @@ class VpnNotification(private val service: Service) {
         )
         val name = serverName?.takeIf { it.isNotBlank() }
         val title = when (state) {
-            VpnConnectionState.CONNECTED -> if (name != null) "Wired to $name" else "Wired to"
-            VpnConnectionState.RECONNECTING -> "Reconnecting…"
-            VpnConnectionState.CONNECTING -> "Connecting…"
-            else -> "Layer"
+            VpnConnectionState.CONNECTED ->
+                if (name != null) service.getString(R.string.notification_wired_to, name)
+                else service.getString(R.string.notification_wired)
+            VpnConnectionState.RECONNECTING -> service.getString(R.string.status_reconnecting)
+            VpnConnectionState.CONNECTING -> service.getString(R.string.status_connecting_ellipsis)
+            else -> service.getString(R.string.app_name)
         }
         return NotificationCompat.Builder(service, CHANNEL_ID)
             .setContentTitle(title)
@@ -86,7 +88,7 @@ class VpnNotification(private val service: Service) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val channel = NotificationChannel(
                     CHANNEL_ID,
-                    "Layer",
+                    context.getString(R.string.app_name),
                     NotificationManager.IMPORTANCE_LOW,
                 ).apply {
                     description = context.getString(R.string.vpn_channel_description)

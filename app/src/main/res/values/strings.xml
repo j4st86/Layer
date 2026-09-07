@@ -42,6 +42,7 @@
     <string name="subscription_added">Subscription added</string>
     <string name="server_added">Server added</string>
     <string name="battery_snackbar">Turn off battery optimization for a stable VPN</string>
+    <string name="battery_snackbar_xiaomi">Set battery saver to No restrictions for a stable VPN</string>
     <string name="recommended_apps_prompt">Add recommended apps?</string>
 
     <string name="add_title">Add</string>
@@ -152,6 +153,9 @@
     <string name="battery_unrestricted">Unrestricted</string>
     <string name="battery_optimized">It is set to Optimized. Choose Unrestricted, or Android may unload the VPN.</string>
     <string name="battery_restricted">Disabled — turn on Allow background usage and choose Unrestricted.</string>
+    <string name="battery_unrestricted_xiaomi">No restrictions</string>
+    <string name="battery_optimized_xiaomi">Battery saver is on. Choose No restrictions, or HyperOS may unload the VPN.</string>
+    <string name="battery_restricted_xiaomi">Disabled — turn on background usage and choose No restrictions.</string>
     <string name="battery_settings">Battery settings</string>
     <string name="always_on_hint">To bring the VPN back after a reboot, enable this in system settings.</string>
     <string name="vpn_settings">VPN settings</string>
@@ -174,6 +178,8 @@
     <string name="send_report_chooser">Send report</string>
     <string name="report_subject">Layer report</string>
     <string name="vpn_channel_description">VPN status</string>
+    <string name="notification_wired_to">Wired to %1$s</string>
+    <string name="notification_wired">Wired to</string>
     <string name="notification_unwire">Unwire</string>
     <string name="notification_rewire">Rewire</string>
 

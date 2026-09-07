@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.ActivityManager
 import android.app.AppOpsManager
 import android.app.usage.UsageStatsManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
@@ -12,6 +13,8 @@ import android.os.Build
 import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
+import com.layer.app.R
+import com.layer.core.config.OemKeepAlivePolicy
 
 /**
  * Android does not let an app turn on Unrestricted battery usage by itself.
@@ -21,6 +24,9 @@ import android.provider.Settings
  * "Allow background usage" off is AppOps RUN_ANY_IN_BACKGROUND = ignored.
  * [ActivityManager.isBackgroundRestricted] does not always match that toggle
  * on Android 14+ and OEM skins, so both signals are checked.
+ *
+ * HyperOS / MIUI "No restrictions" does not set the AOSP ignore-battery
+ * whitelist. On that family a clear background-restricted flag is enough.
  */
 object BackgroundKeepAlive {
     enum class Status {
@@ -31,11 +37,22 @@ object BackgroundKeepAlive {
 
     fun status(context: Context): Status {
         if (isBackgroundRestricted(context)) return Status.RESTRICTED
-        return if (isIgnoringBatteryOptimizations(context)) {
-            Status.UNRESTRICTED
-        } else {
-            Status.OPTIMIZED
+        if (isIgnoringBatteryOptimizations(context)) return Status.UNRESTRICTED
+        if (OemKeepAlivePolicy.treatsOemBackgroundAsUnrestricted(isXiaomiFamily(context))) {
+            return Status.UNRESTRICTED
         }
+        return Status.OPTIMIZED
+    }
+
+    fun isXiaomiFamily(context: Context): Boolean {
+        return OemKeepAlivePolicy.isXiaomiFamily(
+            manufacturer = Build.MANUFACTURER.orEmpty(),
+            brand = Build.BRAND.orEmpty(),
+            model = Build.MODEL.orEmpty(),
+            miuiVersion = systemProperty("ro.miui.ui.version.name"),
+            hyperOsVersion = systemProperty("ro.mi.os.version.name")
+                ?: systemProperty("ro.mi.os.version.code"),
+        )
     }
 
     fun isIgnoringBatteryOptimizations(context: Context): Boolean {
@@ -58,15 +75,43 @@ object BackgroundKeepAlive {
 
     fun openAppBatterySettings(context: Context) {
         val pkg = context.packageName
-        val candidates = listOf(
-            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.fromParts("package", pkg, null)
-            },
-            Intent("android.settings.APP_BATTERY_SETTINGS").apply {
-                data = Uri.parse("package:$pkg")
-                putExtra("android.provider.extra.APP_PACKAGE", pkg)
-            },
-        )
+        val label = context.getString(R.string.app_name)
+        val candidates = buildList {
+            if (isXiaomiFamily(context)) {
+                add(
+                    Intent().setComponent(
+                        ComponentName(
+                            "com.miui.powerkeeper",
+                            "com.miui.powerkeeper.ui.HiddenAppsConfigActivity",
+                        ),
+                    ).putExtra("package_name", pkg).putExtra("package_label", label),
+                )
+                add(
+                    Intent("miui.intent.action.HIDDEN_APPS_CONFIG_ACTIVITY")
+                        .putExtra("package_name", pkg)
+                        .putExtra("package_label", label),
+                )
+                add(
+                    Intent().setComponent(
+                        ComponentName(
+                            "com.miui.securitycenter",
+                            "com.miui.powercenter.PowerSettings",
+                        ),
+                    ),
+                )
+            }
+            add(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.fromParts("package", pkg, null)
+                },
+            )
+            add(
+                Intent("android.settings.APP_BATTERY_SETTINGS").apply {
+                    data = Uri.parse("package:$pkg")
+                    putExtra("android.provider.extra.APP_PACKAGE", pkg)
+                },
+            )
+        }
         for (intent in candidates) {
             if (startActivity(context, intent)) return
         }
@@ -96,6 +141,7 @@ object BackgroundKeepAlive {
             append(" runAnyInBackground=${modeName(mode)}")
             append(" standbyBucket=$bucket")
             append(" forceStopped=$stopped")
+            append(" xiaomi=${isXiaomiFamily(context)}")
         }
     }
 
@@ -128,6 +174,13 @@ object BackgroundKeepAlive {
         AppOpsManager.MODE_DEFAULT -> "default"
         AppOpsManager.MODE_FOREGROUND -> "foreground"
         else -> mode.toString()
+    }
+
+    private fun systemProperty(key: String): String? {
+        return runCatching {
+            val clazz = Class.forName("android.os.SystemProperties")
+            clazz.getMethod("get", String::class.java).invoke(null, key) as? String
+        }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
     }
 
     private const val OPSTR_RUN_ANY_IN_BACKGROUND = "android:run_any_in_background"

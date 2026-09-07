@@ -42,6 +42,7 @@
     <string name="subscription_added">Подписка добавлена</string>
     <string name="server_added">Сервер добавлен</string>
     <string name="battery_snackbar">Отключите оптимизацию батареи для стабильной работы</string>
+    <string name="battery_snackbar_xiaomi">Включите «Нет ограничений» в экономии батареи для стабильной работы</string>
     <string name="recommended_apps_prompt">Добавить рекомендуемые приложения?</string>
 
     <string name="add_title">Добавить</string>
@@ -156,6 +157,9 @@
     <string name="battery_unrestricted">Без ограничений</string>
     <string name="battery_optimized">Сейчас «Оптимизация». Нужен режим «Без ограничений», иначе Android может выгрузить VPN.</string>
     <string name="battery_restricted">Выключена — включите «Разрешить работу в фоне» и выберите «Без ограничений».</string>
+    <string name="battery_unrestricted_xiaomi">Нет ограничений</string>
+    <string name="battery_optimized_xiaomi">Сейчас экономия батареи. Нужен режим «Нет ограничений», иначе система может выгрузить VPN.</string>
+    <string name="battery_restricted_xiaomi">Выключена — включите работу в фоне и выберите «Нет ограничений».</string>
     <string name="battery_settings">Настройки батареи</string>
     <string name="always_on_hint">Чтобы VPN поднимался после перезагрузки, включите это в системе.</string>
     <string name="vpn_settings">Настройки VPN</string>
@@ -178,7 +182,9 @@
     <string name="send_report_chooser">Отправить отчёт</string>
     <string name="report_subject">Layer отчёт</string>
     <string name="vpn_channel_description">Статус VPN</string>
-    <string name="notification_unwire">Unwire</string>
+    <string name="notification_wired_to">Подключено к %1$s</string>
+    <string name="notification_wired">Подключено</string>
+    <string name="notification_unwire">Отключить</string>
     <string name="notification_rewire">Переподключить</string>
 
     <string name="error_generic">Ошибка</string>
