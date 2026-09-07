@@ -174,6 +174,8 @@
     <string name="send_report_chooser">Send report</string>
     <string name="report_subject">Layer report</string>
     <string name="vpn_channel_description">VPN status</string>
+    <string name="notification_unwire">Unwire</string>
+    <string name="notification_rewire">Rewire</string>
 
     <string name="error_generic">Error</string>
     <string name="error_config">Configuration error</string>

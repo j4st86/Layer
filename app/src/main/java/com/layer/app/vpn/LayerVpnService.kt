@@ -74,6 +74,11 @@ class LayerVpnService : VpnService(), CommandServerHandler {
                 scope.launch { reloadInternal() }
                 return START_STICKY
             }
+            ACTION_REWIRE -> {
+                dbg("[VPN] rewire (notification)")
+                scope.launch { reloadInternal() }
+                return START_STICKY
+            }
             else -> {
                 // START, Always-on VPN, or reboot: system may pass a null action.
                 stopping = false
@@ -692,6 +697,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         const val ACTION_START = "com.layer.app.START"
         const val ACTION_STOP = "com.layer.app.STOP"
         const val ACTION_RELOAD = "com.layer.app.RELOAD"
+        const val ACTION_REWIRE = "com.layer.app.REWIRE"
         const val EXTRA_SERVER_NAME = "com.layer.app.EXTRA_SERVER_NAME"
 
         fun start(context: Context, serverName: String = "") {
@@ -721,6 +727,10 @@ class LayerVpnService : VpnService(), CommandServerHandler {
 
         fun stopIntent(context: Context): Intent {
             return Intent(context, LayerVpnService::class.java).setAction(ACTION_STOP)
+        }
+
+        fun rewireIntent(context: Context): Intent {
+            return Intent(context, LayerVpnService::class.java).setAction(ACTION_REWIRE)
         }
     }
 }

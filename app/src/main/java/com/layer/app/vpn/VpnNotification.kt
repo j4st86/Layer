@@ -28,6 +28,12 @@ class VpnNotification(private val service: Service) {
             LayerVpnService.stopIntent(service),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
+        val rewire = PendingIntent.getService(
+            service,
+            2,
+            LayerVpnService.rewireIntent(service),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
         val name = serverName?.takeIf { it.isNotBlank() }
         val title = when (state) {
             VpnConnectionState.CONNECTED -> if (name != null) "Wired to $name" else "Wired to"
@@ -39,7 +45,8 @@ class VpnNotification(private val service: Service) {
             .setContentTitle(title)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(open)
-            .addAction(0, "Unwire", stop)
+            .addAction(0, service.getString(R.string.notification_rewire), rewire)
+            .addAction(0, service.getString(R.string.notification_unwire), stop)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
