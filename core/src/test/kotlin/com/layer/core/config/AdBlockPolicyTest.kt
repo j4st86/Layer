@@ -18,4 +18,10 @@ class AdBlockPolicyTest {
         assertEquals(7, AdBlockPolicy.clampIntervalDays(14))
         assertEquals(7, AdBlockPolicy.clampIntervalDays(-1))
     }
+
+    @Test
+    fun freshnessFollowsClampedDays() {
+        assertEquals(1L * 24 * 60 * 60 * 1000, AdBlockPolicy.freshnessMs(1))
+        assertEquals(7L * 24 * 60 * 60 * 1000, AdBlockPolicy.freshnessMs(99))
+    }
 }

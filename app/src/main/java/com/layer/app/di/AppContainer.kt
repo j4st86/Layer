@@ -1,6 +1,7 @@
 package com.layer.app.di
 
 import android.content.Context
+import com.layer.app.data.AdBlockDownloader
 import com.layer.app.data.LayerDataStore
 import com.layer.app.data.LayerRepository
 import com.layer.app.data.SecureCredentialsStore
@@ -26,4 +27,5 @@ class AppContainer(context: Context) {
         connectionPing,
     )
     val updateChecker = UpdateChecker(appContext)
+    val adBlockDownloader = AdBlockDownloader(appContext)
 }

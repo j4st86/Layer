@@ -12,6 +12,7 @@ import com.layer.app.BuildConfig
 import com.layer.app.data.RuleSetDownloader
 import com.layer.app.di.AppContainer
 import com.layer.app.vpn.BackgroundKeepAlive
+import com.layer.core.config.AdBlockPolicy
 import com.layer.core.diagnostics.Branding
 import com.layer.core.diagnostics.LogSanitizer
 import io.nekohasekai.libbox.Libbox
@@ -74,6 +75,8 @@ object DiagnosticReport {
                 appendLine("Automatic lists: ${snapshot.settings.automaticRuleSetEnabled}")
                 appendLine("Ad block: ${snapshot.settings.adBlockEnabled}")
                 appendLine("Ad block interval days: ${snapshot.settings.adBlockUpdateIntervalDays}")
+                appendLine("Ad block bundled: ${AdBlockPolicy.BUNDLED_VERSION}")
+                appendLine("Ad block file: ${container.adBlockDownloader.debugSnapshot()}")
                 appendLine("Auto select server: ${snapshot.settings.autoSelectServerEnabled}")
                 appendLine("Auto select interval min: ${snapshot.settings.autoSelectIntervalMinutes}")
                 appendLine("Auto select latency ms: ${container.autoServerSelector.status.value.latencyMs ?: "-"}")

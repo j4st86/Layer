@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.layer.app.BuildConfig
+import com.layer.app.data.AdBlockDownloader
 import com.layer.app.data.LayerSnapshot
 import com.layer.app.data.UpdateCheckResult
 import com.layer.app.di.AppContainer
@@ -145,12 +146,18 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
 
     fun setAdBlock(enabled: Boolean) {
         viewModelScope.launch {
+            val settings = snapshot.value.settings
             container.diagnostics.append(
                 "[ADS] UI ${copy(if (enabled) "on" else "off", if (enabled) "включена" else "выключена")}",
             )
-            container.repository.saveSettings(
-                snapshot.value.settings.copy(adBlockEnabled = enabled),
-            )
+            container.repository.saveSettings(settings.copy(adBlockEnabled = enabled))
+            if (enabled) {
+                val fetched = container.adBlockDownloader.ensureCopy(
+                    network = null,
+                    freshnessMs = AdBlockPolicy.freshnessMs(settings.adBlockUpdateIntervalDays),
+                )
+                container.diagnostics.append(AdBlockDownloader.logLine(fetched))
+            }
         }
     }
 

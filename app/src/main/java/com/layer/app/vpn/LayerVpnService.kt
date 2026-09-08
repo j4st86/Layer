@@ -15,7 +15,9 @@ import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import com.layer.app.LayerApp
 import com.layer.app.R
+import com.layer.app.data.AdBlockDownloader
 import com.layer.app.data.RuleSetDownloader
+import com.layer.core.config.AdBlockPolicy
 import com.layer.core.config.RuleSetCatalog
 import com.layer.core.config.AutoServerPolicy
 import com.layer.core.config.IdleRecoveryPolicy
@@ -209,6 +211,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             }
             container.connectionPing.measureAfterConnected("connected")
             tryPromoteRuleSetsViaProxy(resolved.ip, localRuleSets)
+            ensureAdBlockList()
         } catch (error: Exception) {
             fail(combineErrors(error))
         }
@@ -256,6 +259,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             dbg("[VPN] reload startOrReloadService ok")
             container.diagnostics.lastStartedConfig = LogSanitizer.sanitize(generated.json)
             container.connectionPing.measureAfterConnected("reconnect")
+            ensureAdBlockList()
             // Idle/settings reload already includes remote lists when local
             // copies are missing. A second startOrReloadService here tore TUN
             // down again and Telegram's reconnect landed on a dying stack.
@@ -392,6 +396,17 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             },
         )
         return local
+    }
+
+    private suspend fun ensureAdBlockList() {
+        if (stopping) return
+        val settings = container.repository.currentSnapshot().settings
+        if (!settings.adBlockEnabled) return
+        val connectivity = getSystemService(ConnectivityManager::class.java)
+        val network = UnderlyingDns.pickUnderlyingNetwork(connectivity)
+        val freshness = AdBlockPolicy.freshnessMs(settings.adBlockUpdateIntervalDays)
+        val fetched = container.adBlockDownloader.ensureCopy(network, freshness)
+        dbg(AdBlockDownloader.logLine(fetched))
     }
 
     private fun combineErrors(error: Exception): String {
