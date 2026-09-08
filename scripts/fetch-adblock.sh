@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Refresh the bundled AdGuard DNS filter in app/src/main/assets/adblock.
+# Refresh the bundled DNS ad/tracker hostlist in app/src/main/assets/adblock.
 # Keep the file name and BUNDLED_VERSION in sync with AdBlockPolicy.
 # Runtime refresh uses the same 3-day cadence as scripts/fetch-rule-sets.sh.
+# Source and license: THIRD_PARTY.md
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -9,9 +10,9 @@ DEST="$ROOT/app/src/main/assets/adblock"
 mkdir -p "$DEST"
 
 URL="https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt"
-OUT="$DEST/adguard-dns-filter.txt"
+OUT="$DEST/dns-ad-filter.txt"
 
-echo "Downloading AdGuard DNS filter"
+echo "Downloading DNS ad hostlist"
 curl -fsSL -A "Mozilla/5.0 (Layer fetch-adblock)" -o "$OUT" "$URL"
 if [[ ! -s "$OUT" ]]; then
   echo "empty download: $URL" >&2
@@ -28,7 +29,7 @@ for line in text.splitlines()[:20]:
         version = line.split(":", 1)[1].strip()
         break
 if not version:
-    raise SystemExit("! Version: not found in AdGuard DNS filter")
+    raise SystemExit("! Version: not found in DNS hostlist")
 print(version)
 PY
 )"
