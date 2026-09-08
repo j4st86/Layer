@@ -1,9 +1,11 @@
 package com.layer.app.data
 
 import android.content.Context
+import android.net.ConnectivityManager
 import android.net.Network
+import android.net.NetworkCapabilities
 import com.layer.core.config.AdBlockPolicy
-import com.layer.core.config.AdGuardDnsFilter
+import com.layer.core.config.DnsHostlistFilter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -15,6 +17,7 @@ data class AdBlockFetch(
     val bytes: Long = 0,
     val fromCache: Boolean = false,
     val fromAssets: Boolean = false,
+    val waitForWifi: Boolean = false,
     val version: String? = null,
     val error: String? = null,
 ) {
@@ -58,17 +61,25 @@ class AdBlockDownloader(context: Context) {
                     version = readVersion(txt),
                 )
             }
+            val downloadNetwork = adListNetwork(network)
             var fromAssets = false
+            var downloaded = false
+            var waitForWifi = false
             var error: String? = null
             if (!isFresh(txt) || !isUsableFilter(txt)) {
-                error = RemoteFileFetcher.download(
-                    url = AdBlockPolicy.listUrl,
-                    destination = txt,
-                    network = network,
-                    minBytes = MIN_FILTER_BYTES,
-                    accept = "text/plain,*/*",
-                    htmlError = "HTML instead of filter",
-                )
+                if (downloadNetwork != null) {
+                    error = RemoteFileFetcher.download(
+                        url = AdBlockPolicy.listUrl,
+                        destination = txt,
+                        network = downloadNetwork,
+                        minBytes = MIN_FILTER_BYTES,
+                        accept = "text/plain,*/*",
+                        htmlError = "HTML instead of filter",
+                    )
+                    downloaded = error == null
+                } else {
+                    waitForWifi = true
+                }
                 if (!isUsableFilter(txt) && copyFromAssets(txt)) {
                     fromAssets = true
                 }
@@ -81,19 +92,43 @@ class AdBlockDownloader(context: Context) {
                 return@withContext AdBlockFetch(
                     path = json.absolutePath,
                     bytes = json.length(),
-                    fromCache = error != null && !fromAssets,
+                    fromCache = !downloaded && !fromAssets,
                     fromAssets = fromAssets,
+                    waitForWifi = waitForWifi,
                     version = readVersion(txt) ?: AdBlockPolicy.BUNDLED_VERSION.takeIf { fromAssets },
                     error = error,
                 )
             }
-            AdBlockFetch(error = error ?: "missing")
+            AdBlockFetch(waitForWifi = waitForWifi, error = error ?: "missing")
         }
+    }
+
+    private fun adListNetwork(preferred: Network?): Network? {
+        val connectivity = app.getSystemService(ConnectivityManager::class.java)
+        if (preferred != null && isWifiOrEthernet(connectivity, preferred)) return preferred
+        return connectivity.allNetworks.filter { isWifiOrEthernet(connectivity, it) }
+            .maxByOrNull { network ->
+                val caps = connectivity.getNetworkCapabilities(network)
+                when {
+                    caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true -> 2
+                    caps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true -> 1
+                    else -> 0
+                }
+            }
+    }
+
+    private fun isWifiOrEthernet(connectivity: ConnectivityManager, network: Network): Boolean {
+        val caps = connectivity.getNetworkCapabilities(network) ?: return false
+        if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return false
+        if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)) return false
+        if (!caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) return false
+        return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+            caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
     }
 
     private fun convert(txt: File, json: File): String? {
         val parsed = runCatching {
-            txt.bufferedReader().use { AdGuardDnsFilter.parse(it) }
+            txt.bufferedReader().use { DnsHostlistFilter.parse(it) }
         }.getOrElse { return RemoteFileFetcher.describe(it) }
         if (parsed.block.size < MIN_PARSED_RULES) {
             return "too few rules (${parsed.block.size})"
@@ -156,18 +191,19 @@ class AdBlockDownloader(context: Context) {
         fun logLine(fetch: AdBlockFetch): String {
             val size = sizeLabel(fetch.bytes)
             val version = fetch.version?.let { " $it" }.orEmpty()
+            val wifi = if (fetch.waitForWifi) " (скачивание только по Wi‑Fi)" else ""
             return when {
                 !fetch.isPresent ->
-                    "[ADS] AdGuard DNS filter нет" + fetch.error?.let { ": $it" }.orEmpty()
+                    "[ADS] DNS-фильтр рекламы нет" + fetch.error?.let { ": $it" }.orEmpty() + wifi
                 fetch.fromAssets ->
-                    "[ADS] AdGuard DNS filter из APK (${AdBlockPolicy.BUNDLED_VERSION}) $size$version" +
-                        fetch.error?.let { ", GitHub: $it" }.orEmpty()
+                    "[ADS] DNS-фильтр рекламы из APK (${AdBlockPolicy.BUNDLED_VERSION}) $size$version" +
+                        fetch.error?.let { ", сеть: $it" }.orEmpty() + wifi
                 fetch.fromCache && fetch.error != null ->
-                    "[ADS] AdGuard DNS filter кэш $size$version (${fetch.error})"
+                    "[ADS] DNS-фильтр рекламы кэш $size$version (${fetch.error})$wifi"
                 fetch.fromCache ->
-                    "[ADS] AdGuard DNS filter свежий $size$version"
+                    "[ADS] DNS-фильтр рекламы свежий $size$version$wifi"
                 else ->
-                    "[ADS] AdGuard DNS filter скачан $size$version"
+                    "[ADS] DNS-фильтр рекламы скачан $size$version"
             }
         }
 

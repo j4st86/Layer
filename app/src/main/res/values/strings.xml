@@ -119,7 +119,7 @@
     <string name="settings_auto_lists">Automatic VPN list</string>
     <string name="settings_auto_lists_sub">YouTube, Telegram and other itdoginfo lists go through the VPS.</string>
     <string name="settings_ad_block">Block ads</string>
-    <string name="settings_ad_block_sub">AdGuard DNS filter blocks ads. It refreshes every 3 days, same as the VPN domain lists.</string>
+    <string name="settings_ad_block_sub">Blocks ads and trackers at the DNS level. The list updates over Wi‑Fi every 3 days; on mobile the copy from the app is used.</string>
     <string name="settings_ipv6_sub">Turn this on if your network and server support it.</string>
     <string name="settings_stability">Stability</string>
     <string name="settings_logs">Logs and diagnostics</string>

@@ -6,11 +6,11 @@ import java.io.Reader
 import java.io.Writer
 
 /**
- * Turns an AdGuard DNS filter (`||domain^`, `@@||domain^`) into a sing-box
- * source rule-set. AdGuard text is not a legal source format; `adguard_domain`
- * only exists inside compiled SRS, so Layer writes `domain_suffix` JSON.
+ * Turns an ABP-style DNS hostlist (`||domain^`, `@@||domain^`) into a sing-box
+ * source rule-set. The text list is not a legal sing-box source format, so
+ * Layer writes `domain_suffix` JSON.
  */
-data class AdGuardDnsFilterSet(
+data class DnsHostlistFilterSet(
     val block: List<String>,
     val allow: List<String>,
     val skipped: Int,
@@ -65,12 +65,12 @@ data class AdGuardDnsFilterSet(
     }
 }
 
-object AdGuardDnsFilter {
+object DnsHostlistFilter {
     private val ipv4Regex = Regex("""^(\d{1,3}\.){3}\d{1,3}$""")
 
-    fun parse(text: String): AdGuardDnsFilterSet = parse(text.reader())
+    fun parse(text: String): DnsHostlistFilterSet = parse(text.reader())
 
-    fun parse(reader: Reader): AdGuardDnsFilterSet {
+    fun parse(reader: Reader): DnsHostlistFilterSet {
         val block = LinkedHashSet<String>()
         val allow = LinkedHashSet<String>()
         var skipped = 0
@@ -82,7 +82,7 @@ object AdGuardDnsFilter {
             }
         }
         block.removeAll(allow)
-        return AdGuardDnsFilterSet(
+        return DnsHostlistFilterSet(
             block = block.toList(),
             allow = allow.toList(),
             skipped = skipped,

@@ -51,6 +51,7 @@ direct
 
 - Native client: Kotlin, Jetpack Compose, Android `VpnService`, [sing-box](https://github.com/SagerNet/sing-box) (libbox)
 - Automatic lists: YouTube, Telegram, Instagram / Facebook, X, Discord, TikTok, Google AI, Google Play, Cloudflare, foreign media, HDRezka, geoblock
+- Optional DNS-level blocking of ads and trackers
 - App rules: send all of an app’s traffic through the VPN, or always bypass it
 - Custom domains, including zones like `.рф`
 - Diagnostics with secrets stripped from logs; reports go to Downloads
@@ -85,3 +86,5 @@ Android only: **Network & internet → VPN → Layer → Always-on VPN**. The ap
 ## License
 
 [GNU GPL v3](LICENSE). The VPN core is sing-box / libbox, also GPL-3.0; linking it requires the same license for Layer.
+
+Third-party lists (the DNS ad hostlist, itdoginfo, the core) are listed in [THIRD_PARTY.md](THIRD_PARTY.md). Layer is not affiliated with their authors.

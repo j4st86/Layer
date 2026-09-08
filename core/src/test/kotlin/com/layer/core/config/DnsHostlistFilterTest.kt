@@ -11,10 +11,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.StringWriter
 
-class AdGuardDnsFilterTest {
+class DnsHostlistFilterTest {
     @Test
     fun parsesSuffixExceptionsAndSkipsNoise() {
-        val parsed = AdGuardDnsFilter.parse(
+        val parsed = DnsHostlistFilter.parse(
             """
             ! Title: test
             ||ads.example.com^
@@ -38,7 +38,7 @@ class AdGuardDnsFilterTest {
 
     @Test
     fun exceptionIsRemovedFromBlockList() {
-        val parsed = AdGuardDnsFilter.parse(
+        val parsed = DnsHostlistFilter.parse(
             """
             ||ad.10010.com^
             @@||ad.10010.com^
@@ -51,7 +51,7 @@ class AdGuardDnsFilterTest {
 
     @Test
     fun writesLogicalSourceRuleSetWhenAllowExists() {
-        val parsed = AdGuardDnsFilter.parse(
+        val parsed = DnsHostlistFilter.parse(
             """
             ||ads.example.com^
             @@||safe.example.com^
@@ -74,7 +74,7 @@ class AdGuardDnsFilterTest {
 
     @Test
     fun writesFlatRuleSetWithoutAllow() {
-        val parsed = AdGuardDnsFilter.parse("||ads.example.com^\n")
+        val parsed = DnsHostlistFilter.parse("||ads.example.com^\n")
         val json = StringWriter().also { parsed.writeSourceJson(it) }.toString()
         val root = Json.parseToJsonElement(json).jsonObject
         val rule = root["rules"]!!.jsonArray.first().jsonObject
@@ -85,10 +85,10 @@ class AdGuardDnsFilterTest {
     @Test
     fun bundledFilterHasEnoughSuffixRules() {
         val file = listOf(
-            java.io.File("app/src/main/assets/adblock/adguard-dns-filter.txt"),
-            java.io.File("../app/src/main/assets/adblock/adguard-dns-filter.txt"),
+            java.io.File("app/src/main/assets/adblock/${AdBlockPolicy.fileName}"),
+            java.io.File("../app/src/main/assets/adblock/${AdBlockPolicy.fileName}"),
         ).firstOrNull { it.isFile } ?: return
-        val parsed = file.bufferedReader().use { AdGuardDnsFilter.parse(it) }
+        val parsed = file.bufferedReader().use { DnsHostlistFilter.parse(it) }
         assertTrue(parsed.block.size > 100_000)
         assertTrue(parsed.isUsable)
     }

@@ -51,6 +51,7 @@ Split-туннель есть у многих клиентов. Layer заточ
 
 - Нативный клиент: Kotlin, Jetpack Compose, Android `VpnService`, ядро [sing-box](https://github.com/SagerNet/sing-box) (libbox)
 - Автосписки: YouTube, Telegram, Instagram / Facebook, X, Discord, TikTok, Google AI, Google Play, Cloudflare, зарубежные СМИ, HDRezka, геоблок
+- Опциональная блокировка рекламы и трекеров по DNS-хостлисту
 - Правила приложений: весь трафик программы в VPN или всегда мимо
 - Свои домены, в том числе зоны вроде `.рф`
 - Диагностика без секретов в логах, отчёт в Downloads
@@ -85,3 +86,5 @@ Split-туннель есть у многих клиентов. Layer заточ
 ## Лицензия
 
 [GNU GPL v3](LICENSE). Ядро — sing-box / libbox, тоже GPL-3.0; из-за линковки тот же тип лицензии обязателен и для Layer.
+
+Сторонние списки (хостлист рекламы, itdoginfo, ядро) — в [THIRD_PARTY.md](THIRD_PARTY.md). Layer не связан с их авторами.

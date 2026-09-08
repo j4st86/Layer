@@ -471,7 +471,7 @@ object SingBoxConfigGenerator {
                     put("udp_timeout", "5m")
                 })
             }
-            // 5. AdGuard DNS filter (user domain DIRECT still wins as a whitelist)
+            // 5. DNS ad hostlist (user domain DIRECT still wins as a whitelist)
             if (!adBlockPath.isNullOrBlank()) {
                 add(buildJsonObject {
                     putJsonArray("rule_set") { add(AdBlockPolicy.TAG) }

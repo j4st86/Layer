@@ -379,14 +379,14 @@ class SingBoxConfigGeneratorTest {
                 DomainRoutingRule("example.ru", DomainRoutingMode.DIRECT),
             ),
             ownPackageName = "com.layer.app",
-            adBlockRuleSetPath = "/data/adblock/adguard-dns-filter.json",
+            adBlockRuleSetPath = "/data/adblock/dns-ad-filter.json",
         ).json
         val root = Json.parseToJsonElement(json).jsonObject
         val ruleSets = root["route"]!!.jsonObject["rule_set"]!!.jsonArray
-        val ads = ruleSets.first { it.jsonObject["tag"]!!.jsonPrimitive.content == "rs-adguard" }.jsonObject
+        val ads = ruleSets.first { it.jsonObject["tag"]!!.jsonPrimitive.content == "rs-ads" }.jsonObject
         assertEquals("local", ads["type"]!!.jsonPrimitive.content)
         assertEquals("source", ads["format"]!!.jsonPrimitive.content)
-        assertEquals("/data/adblock/adguard-dns-filter.json", ads["path"]!!.jsonPrimitive.content)
+        assertEquals("/data/adblock/dns-ad-filter.json", ads["path"]!!.jsonPrimitive.content)
 
         val routeRules = root["route"]!!.jsonObject["rules"]!!.jsonArray
         val serialized = routeRules.map { it.toString() }
@@ -394,7 +394,7 @@ class SingBoxConfigGeneratorTest {
         val adsReject = routeRules.indexOfFirst { rule ->
             val obj = rule.jsonObject
             obj["action"]?.jsonPrimitive?.content == "reject" &&
-                obj["rule_set"]?.toString().orEmpty().contains("rs-adguard")
+                obj["rule_set"]?.toString().orEmpty().contains("rs-ads")
         }
         val automatic = serialized.indexOfFirst { it.contains("rs-youtube") && it.contains("proxy") }
         assertTrue(userDirect >= 0)
@@ -404,7 +404,7 @@ class SingBoxConfigGeneratorTest {
         val dnsAds = root["dns"]!!.jsonObject["rules"]!!.jsonArray.first { rule ->
             val obj = rule.jsonObject
             obj["action"]?.jsonPrimitive?.content == "reject" &&
-                obj["rule_set"]?.toString().orEmpty().contains("rs-adguard")
+                obj["rule_set"]?.toString().orEmpty().contains("rs-ads")
         }.jsonObject
         assertEquals("reject", dnsAds["action"]!!.jsonPrimitive.content)
     }
@@ -417,10 +417,10 @@ class SingBoxConfigGeneratorTest {
             appRules = emptyList(),
             domainRules = emptyList(),
             ownPackageName = "com.layer.app",
-            adBlockRuleSetPath = "/data/adblock/adguard-dns-filter.json",
+            adBlockRuleSetPath = "/data/adblock/dns-ad-filter.json",
         ).json
-        assertFalse(json.contains("rs-adguard"))
-        assertFalse(json.contains("adguard-dns-filter.json"))
+        assertFalse(json.contains("rs-ads"))
+        assertFalse(json.contains("dns-ad-filter.json"))
     }
 
     @Test
@@ -433,6 +433,6 @@ class SingBoxConfigGeneratorTest {
             ownPackageName = "com.layer.app",
             adBlockRuleSetPath = null,
         ).json
-        assertFalse(json.contains("rs-adguard"))
+        assertFalse(json.contains("rs-ads"))
     }
 }
