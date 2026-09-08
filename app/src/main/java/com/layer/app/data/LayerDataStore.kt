@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.layer.core.config.AdBlockPolicy
 import com.layer.core.config.AutoServerPolicy
 import com.layer.core.model.AppRoutingRule
 import com.layer.core.model.DomainRoutingRule
@@ -79,6 +80,10 @@ class LayerDataStore(private val context: Context) {
             autoSelectIntervalMinutes = AutoServerPolicy.clampInterval(
                 prefs[Keys.AUTO_SELECT_INTERVAL] ?: AutoServerPolicy.defaultIntervalMinutes,
             ),
+            adBlockEnabled = prefs[Keys.AD_BLOCK] ?: false,
+            adBlockUpdateIntervalDays = AdBlockPolicy.clampIntervalDays(
+                prefs[Keys.AD_BLOCK_INTERVAL_DAYS] ?: AdBlockPolicy.defaultIntervalDays,
+            ),
         )
     }
 
@@ -91,6 +96,8 @@ class LayerDataStore(private val context: Context) {
         prefs[Keys.RECOMMENDED_APPS_PROMPT] = settings.recommendedAppsPromptDone
         prefs[Keys.AUTO_SELECT_SERVER] = settings.autoSelectServerEnabled
         prefs[Keys.AUTO_SELECT_INTERVAL] = AutoServerPolicy.clampInterval(settings.autoSelectIntervalMinutes)
+        prefs[Keys.AD_BLOCK] = settings.adBlockEnabled
+        prefs[Keys.AD_BLOCK_INTERVAL_DAYS] = AdBlockPolicy.clampIntervalDays(settings.adBlockUpdateIntervalDays)
     }
 
     private inline fun <reified T> decodeList(raw: String?): List<T> {
@@ -107,6 +114,8 @@ class LayerDataStore(private val context: Context) {
         val RECOMMENDED_APPS_PROMPT = booleanPreferencesKey("recommended_apps_prompt_done")
         val AUTO_SELECT_SERVER = booleanPreferencesKey("auto_select_server")
         val AUTO_SELECT_INTERVAL = intPreferencesKey("auto_select_interval_min")
+        val AD_BLOCK = booleanPreferencesKey("ad_block")
+        val AD_BLOCK_INTERVAL_DAYS = intPreferencesKey("ad_block_interval_days")
         val APP_RULES = stringPreferencesKey("app_rules")
         val DOMAIN_RULES = stringPreferencesKey("domain_rules")
     }

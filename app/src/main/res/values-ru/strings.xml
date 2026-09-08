@@ -92,6 +92,12 @@
         <item quantity="many">%d минут</item>
         <item quantity="other">%d минуты</item>
     </plurals>
+    <plurals name="days_count">
+        <item quantity="one">%d день</item>
+        <item quantity="few">%d дня</item>
+        <item quantity="many">%d дней</item>
+        <item quantity="other">%d дня</item>
+    </plurals>
 
     <string name="apps_title">Приложения</string>
     <string name="apps_empty_title">Пока нет правил</string>
@@ -122,6 +128,9 @@
     <string name="settings_routing">Маршрутизация</string>
     <string name="settings_auto_lists">Автоматический список VPN</string>
     <string name="settings_auto_lists_sub">YouTube, Telegram и другие списки itdoginfo идут через VPS.</string>
+    <string name="settings_ad_block">Блокировка рекламы</string>
+    <string name="settings_ad_block_sub">Списки AdGuard отсекают рекламу в трафике, который идёт через VPN.</string>
+    <string name="settings_ad_block_check_every">Обновлять списки каждые</string>
     <string name="settings_ipv6_sub">Включайте, если сеть и сервер его поддерживают.</string>
     <string name="settings_stability">Стабильность</string>
     <string name="settings_logs">Логи и диагностика</string>

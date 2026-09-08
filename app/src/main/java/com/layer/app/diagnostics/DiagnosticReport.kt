@@ -72,6 +72,8 @@ object DiagnosticReport {
                 appendLine("Fingerprint: ${snapshot.settings.server.fingerprint}")
                 appendLine("ALPN: ${snapshot.settings.server.alpn}")
                 appendLine("Automatic lists: ${snapshot.settings.automaticRuleSetEnabled}")
+                appendLine("Ad block: ${snapshot.settings.adBlockEnabled}")
+                appendLine("Ad block interval days: ${snapshot.settings.adBlockUpdateIntervalDays}")
                 appendLine("Auto select server: ${snapshot.settings.autoSelectServerEnabled}")
                 appendLine("Auto select interval min: ${snapshot.settings.autoSelectIntervalMinutes}")
                 appendLine("Auto select latency ms: ${container.autoServerSelector.status.value.latencyMs ?: "-"}")

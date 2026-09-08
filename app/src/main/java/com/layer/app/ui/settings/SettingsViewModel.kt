@@ -8,6 +8,7 @@ import com.layer.app.data.LayerSnapshot
 import com.layer.app.data.UpdateCheckResult
 import com.layer.app.di.AppContainer
 import com.layer.app.vpn.VpnConnectionState
+import com.layer.core.config.AdBlockPolicy
 import com.layer.core.config.AutoServerPolicy
 import com.layer.core.i18n.copy
 import com.layer.core.model.LayerSettings
@@ -139,6 +140,32 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             if (updated.autoSelectServerEnabled && connected) {
                 container.autoServerSelector.startMonitoring()
             }
+        }
+    }
+
+    fun setAdBlock(enabled: Boolean) {
+        viewModelScope.launch {
+            container.diagnostics.append(
+                "[ADS] UI ${copy(if (enabled) "on" else "off", if (enabled) "включена" else "выключена")}",
+            )
+            container.repository.saveSettings(
+                snapshot.value.settings.copy(adBlockEnabled = enabled),
+            )
+        }
+    }
+
+    fun setAdBlockIntervalDays(days: Int) {
+        viewModelScope.launch {
+            val updated = snapshot.value.settings.copy(
+                adBlockUpdateIntervalDays = AdBlockPolicy.clampIntervalDays(days),
+            )
+            container.diagnostics.append(
+                "[ADS] UI " + copy(
+                    "interval ${updated.adBlockUpdateIntervalDays} d",
+                    "интервал ${updated.adBlockUpdateIntervalDays} дн",
+                ),
+            )
+            container.repository.saveSettings(updated)
         }
     }
 
