@@ -368,4 +368,71 @@ class SingBoxConfigGeneratorTest {
         assertFalse(json.contains("download_detour"))
         assertFalse(json.contains("rs-youtube"))
     }
+
+    @Test
+    fun adBlockRejectsWhenEnabledAndFilePresent() {
+        val json = SingBoxConfigGenerator.generate(
+            uuid = sampleUuid,
+            settings = sampleSettings.copy(adBlockEnabled = true),
+            appRules = emptyList(),
+            domainRules = listOf(
+                DomainRoutingRule("example.ru", DomainRoutingMode.DIRECT),
+            ),
+            ownPackageName = "com.layer.app",
+            adBlockRuleSetPath = "/data/adblock/adguard-dns-filter.json",
+        ).json
+        val root = Json.parseToJsonElement(json).jsonObject
+        val ruleSets = root["route"]!!.jsonObject["rule_set"]!!.jsonArray
+        val ads = ruleSets.first { it.jsonObject["tag"]!!.jsonPrimitive.content == "rs-adguard" }.jsonObject
+        assertEquals("local", ads["type"]!!.jsonPrimitive.content)
+        assertEquals("source", ads["format"]!!.jsonPrimitive.content)
+        assertEquals("/data/adblock/adguard-dns-filter.json", ads["path"]!!.jsonPrimitive.content)
+
+        val routeRules = root["route"]!!.jsonObject["rules"]!!.jsonArray
+        val serialized = routeRules.map { it.toString() }
+        val userDirect = serialized.indexOfFirst { it.contains("example.ru") }
+        val adsReject = routeRules.indexOfFirst { rule ->
+            val obj = rule.jsonObject
+            obj["action"]?.jsonPrimitive?.content == "reject" &&
+                obj["rule_set"]?.toString().orEmpty().contains("rs-adguard")
+        }
+        val automatic = serialized.indexOfFirst { it.contains("rs-youtube") && it.contains("proxy") }
+        assertTrue(userDirect >= 0)
+        assertTrue(adsReject > userDirect)
+        assertTrue(automatic > adsReject)
+
+        val dnsAds = root["dns"]!!.jsonObject["rules"]!!.jsonArray.first { rule ->
+            val obj = rule.jsonObject
+            obj["action"]?.jsonPrimitive?.content == "reject" &&
+                obj["rule_set"]?.toString().orEmpty().contains("rs-adguard")
+        }.jsonObject
+        assertEquals("reject", dnsAds["action"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun adBlockOmittedWhenDisabledEvenIfFilePresent() {
+        val json = SingBoxConfigGenerator.generate(
+            uuid = sampleUuid,
+            settings = sampleSettings.copy(adBlockEnabled = false),
+            appRules = emptyList(),
+            domainRules = emptyList(),
+            ownPackageName = "com.layer.app",
+            adBlockRuleSetPath = "/data/adblock/adguard-dns-filter.json",
+        ).json
+        assertFalse(json.contains("rs-adguard"))
+        assertFalse(json.contains("adguard-dns-filter.json"))
+    }
+
+    @Test
+    fun adBlockOmittedWhenEnabledButFileMissing() {
+        val json = SingBoxConfigGenerator.generate(
+            uuid = sampleUuid,
+            settings = sampleSettings.copy(adBlockEnabled = true),
+            appRules = emptyList(),
+            domainRules = emptyList(),
+            ownPackageName = "com.layer.app",
+            adBlockRuleSetPath = null,
+        ).json
+        assertFalse(json.contains("rs-adguard"))
+    }
 }

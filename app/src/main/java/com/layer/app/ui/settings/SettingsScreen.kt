@@ -71,7 +71,6 @@ import com.layer.app.ui.components.TonalCard
 import com.layer.app.ui.update.UpdateAvailableDialog
 import com.layer.app.vpn.BackgroundKeepAlive
 import com.layer.app.diagnostics.DiagnosticReport
-import com.layer.core.config.AdBlockPolicy
 import com.layer.core.config.AutoServerPolicy
 import kotlinx.coroutines.launch
 
@@ -92,7 +91,6 @@ fun SettingsScreen() {
     var confirmResetAll by remember { mutableStateOf(false) }
     var showAlwaysOnInfo by remember { mutableStateOf(false) }
     var showIntervalPicker by remember { mutableStateOf(false) }
-    var showAdBlockIntervalPicker by remember { mutableStateOf(false) }
     var keepAlive by remember { mutableStateOf(BackgroundKeepAlive.status(context)) }
     var language by remember { mutableStateOf(AppLanguagePreferences.get(context)) }
     val listColors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
@@ -214,32 +212,6 @@ fun SettingsScreen() {
                         subtitle = stringResource(R.string.settings_ad_block_sub),
                         checked = settings.adBlockEnabled,
                         onChecked = viewModel::setAdBlock,
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    ListItem(
-                        headlineContent = { Text(stringResource(R.string.settings_ad_block_check_every)) },
-                        supportingContent = {
-                            Text(
-                                pluralStringResource(
-                                    R.plurals.days_count,
-                                    AdBlockPolicy.clampIntervalDays(settings.adBlockUpdateIntervalDays),
-                                    AdBlockPolicy.clampIntervalDays(settings.adBlockUpdateIntervalDays),
-                                ),
-                            )
-                        },
-                        colors = if (settings.adBlockEnabled) {
-                            listColors
-                        } else {
-                            ListItemDefaults.colors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                headlineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                                supportingColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
-                            )
-                        },
-                        modifier = Modifier.clickable(
-                            enabled = settings.adBlockEnabled,
-                            onClick = { showAdBlockIntervalPicker = true },
-                        ),
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     SettingSwitch(
@@ -389,44 +361,6 @@ fun SettingsScreen() {
             },
             confirmButton = {
                 TextButton(onClick = { showIntervalPicker = false }) { Text(stringResource(R.string.action_cancel)) }
-            },
-        )
-    }
-    if (showAdBlockIntervalPicker) {
-        AlertDialog(
-            onDismissRequest = { showAdBlockIntervalPicker = false },
-            title = { Text(stringResource(R.string.settings_ad_block_check_every)) },
-            text = {
-                Column {
-                    AdBlockPolicy.intervalDays.forEach { days ->
-                        ListItem(
-                            headlineContent = {
-                                Text(pluralStringResource(R.plurals.days_count, days, days))
-                            },
-                            leadingContent = {
-                                RadioButton(
-                                    selected = days == settings.adBlockUpdateIntervalDays,
-                                    onClick = {
-                                        viewModel.setAdBlockIntervalDays(days)
-                                        showAdBlockIntervalPicker = false
-                                    },
-                                )
-                            },
-                            colors = ListItemDefaults.colors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            ),
-                            modifier = Modifier.clickable {
-                                viewModel.setAdBlockIntervalDays(days)
-                                showAdBlockIntervalPicker = false
-                            },
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showAdBlockIntervalPicker = false }) {
-                    Text(stringResource(R.string.action_cancel))
-                }
             },
         )
     }

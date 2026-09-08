@@ -341,6 +341,7 @@ class LayerRepository(
         resolvedServerIp: String? = null,
         localRuleSets: Map<String, String> = emptyMap(),
         remoteRuleSetFallback: Boolean = true,
+        adBlockRuleSetPath: String? = null,
     ): com.layer.core.config.ConfigGenerationResult {
         val snap = currentSnapshot()
         val serverId = snap.settings.activeServerId
@@ -353,6 +354,7 @@ class LayerRepository(
             resolvedServerIp = resolvedServerIp,
             localRuleSets = localRuleSets,
             remoteRuleSetFallback = remoteRuleSetFallback,
+            adBlockRuleSetPath = adBlockRuleSetPath,
             logLevel = "info",
         )
     }

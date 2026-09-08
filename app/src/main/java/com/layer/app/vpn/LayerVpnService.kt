@@ -17,7 +17,6 @@ import com.layer.app.LayerApp
 import com.layer.app.R
 import com.layer.app.data.AdBlockDownloader
 import com.layer.app.data.RuleSetDownloader
-import com.layer.core.config.AdBlockPolicy
 import com.layer.core.config.RuleSetCatalog
 import com.layer.core.config.AutoServerPolicy
 import com.layer.core.config.IdleRecoveryPolicy
@@ -37,8 +36,10 @@ import io.nekohasekai.libbox.TunOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.net.InetAddress
@@ -173,12 +174,13 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             dbg("[VPN] Reality dest/SNI=${settings.server.serverName} fp=${settings.server.fingerprint} sid=${settings.server.shortId.isNotBlank()}")
         }
         if (stopping) return
-        val localRuleSets = prepareLocalRuleSets()
+        val prepared = prepareLists()
         if (stopping) return
         val generated = container.repository.buildConfig(
             resolved.ip,
-            localRuleSets,
+            prepared.ruleSets,
             remoteRuleSetFallback = false,
+            adBlockRuleSetPath = prepared.adBlockPath,
         )
         if (stopping) return
         if (!generated.isSuccess) {
@@ -210,8 +212,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
                 dbg("[AUTO] мониторинг не стартовал: серверов ${settings.servers.size}")
             }
             container.connectionPing.measureAfterConnected("connected")
-            tryPromoteRuleSetsViaProxy(resolved.ip, localRuleSets)
-            ensureAdBlockList()
+            tryPromoteRuleSetsViaProxy(resolved.ip, prepared)
         } catch (error: Exception) {
             fail(combineErrors(error))
         }
@@ -231,13 +232,14 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         updateStatus(VpnConnectionState.RECONNECTING, getString(R.string.status_reconnecting))
         val host = settings.server.address
         val resolved = UnderlyingDns.resolve(this, host)
-        val localRuleSets = prepareLocalRuleSets()
+        val prepared = prepareLists()
         val wantRemoteLists = settings.automaticRuleSetEnabled &&
-            localRuleSets.size < RuleSetCatalog.vpnLists.size
+            prepared.ruleSets.size < RuleSetCatalog.vpnLists.size
         val generated = container.repository.buildConfig(
             resolved.ip,
-            localRuleSets,
+            prepared.ruleSets,
             remoteRuleSetFallback = wantRemoteLists,
+            adBlockRuleSetPath = prepared.adBlockPath,
         )
         if (!generated.isSuccess) {
             fail(generated.error ?: getString(R.string.error_config))
@@ -259,7 +261,6 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             dbg("[VPN] reload startOrReloadService ok")
             container.diagnostics.lastStartedConfig = LogSanitizer.sanitize(generated.json)
             container.connectionPing.measureAfterConnected("reconnect")
-            ensureAdBlockList()
             // Idle/settings reload already includes remote lists when local
             // copies are missing. A second startOrReloadService here tore TUN
             // down again and Telegram's reconnect landed on a dying stack.
@@ -270,15 +271,16 @@ class LayerVpnService : VpnService(), CommandServerHandler {
 
     private suspend fun tryPromoteRuleSetsViaProxy(
         resolvedIp: String?,
-        localRuleSets: Map<String, String>,
+        prepared: PreparedLists,
     ) {
         if (stopping) return
         val enabled = container.repository.currentSnapshot().settings.automaticRuleSetEnabled
-        if (stopping || !enabled || localRuleSets.size >= RuleSetCatalog.vpnLists.size) return
+        if (stopping || !enabled || prepared.ruleSets.size >= RuleSetCatalog.vpnLists.size) return
         val withRemote = container.repository.buildConfig(
             resolvedIp,
-            localRuleSets,
+            prepared.ruleSets,
             remoteRuleSetFallback = true,
+            adBlockRuleSetPath = prepared.adBlockPath,
         )
         if (!withRemote.isSuccess) return
         if (runCatching { Libbox.checkConfig(withRemote.json) }.isFailure) return
@@ -294,8 +296,9 @@ class LayerVpnService : VpnService(), CommandServerHandler {
 
         val withoutRemote = container.repository.buildConfig(
             resolvedIp,
-            localRuleSets,
+            prepared.ruleSets,
             remoteRuleSetFallback = false,
+            adBlockRuleSetPath = prepared.adBlockPath,
         )
         val reverted = runCatching {
             check(withoutRemote.isSuccess) { withoutRemote.error ?: getString(R.string.error_config) }
@@ -369,11 +372,27 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         stopSelf()
     }
 
-    private suspend fun prepareLocalRuleSets(): Map<String, String> {
-        val enabled = container.repository.currentSnapshot().settings.automaticRuleSetEnabled
-        if (!enabled) return emptyMap()
+    private data class PreparedLists(
+        val ruleSets: Map<String, String>,
+        val adBlockPath: String?,
+    )
+
+    private suspend fun prepareLists(): PreparedLists {
+        val settings = container.repository.currentSnapshot().settings
         val connectivity = getSystemService(ConnectivityManager::class.java)
         val network = UnderlyingDns.pickUnderlyingNetwork(connectivity)
+        return supervisorScope {
+            val ruleSets = async {
+                if (!settings.automaticRuleSetEnabled) emptyMap() else fetchRuleSets(network)
+            }
+            val ads = async {
+                if (!settings.adBlockEnabled) null else fetchAdBlock(network)
+            }
+            PreparedLists(ruleSets.await(), ads.await())
+        }
+    }
+
+    private suspend fun fetchRuleSets(network: android.net.Network?): Map<String, String> {
         val downloader = RuleSetDownloader(this)
         val fetched = downloader.ensureDirectCopies(network)
         val local = fetched.files
@@ -398,15 +417,10 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         return local
     }
 
-    private suspend fun ensureAdBlockList() {
-        if (stopping) return
-        val settings = container.repository.currentSnapshot().settings
-        if (!settings.adBlockEnabled) return
-        val connectivity = getSystemService(ConnectivityManager::class.java)
-        val network = UnderlyingDns.pickUnderlyingNetwork(connectivity)
-        val freshness = AdBlockPolicy.freshnessMs(settings.adBlockUpdateIntervalDays)
-        val fetched = container.adBlockDownloader.ensureCopy(network, freshness)
+    private suspend fun fetchAdBlock(network: android.net.Network?): String? {
+        val fetched = container.adBlockDownloader.ensureCopy(network)
         dbg(AdBlockDownloader.logLine(fetched))
+        return fetched.path
     }
 
     private fun combineErrors(error: Exception): String {

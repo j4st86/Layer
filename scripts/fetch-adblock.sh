@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Refresh the bundled AdGuard DNS filter in app/src/main/assets/adblock.
 # Keep the file name and BUNDLED_VERSION in sync with AdBlockPolicy.
+# Runtime refresh uses the same 3-day cadence as scripts/fetch-rule-sets.sh.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

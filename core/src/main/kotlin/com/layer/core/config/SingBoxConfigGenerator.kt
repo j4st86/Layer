@@ -52,6 +52,7 @@ object SingBoxConfigGenerator {
         resolvedServerIp: String? = null,
         localRuleSets: Map<String, String> = emptyMap(),
         remoteRuleSetFallback: Boolean = true,
+        adBlockRuleSetPath: String? = null,
         logLevel: String = "info",
     ): ConfigGenerationResult {
         val trimmedUuid = VlessLinkParser.extractUuid(uuid)
@@ -106,13 +107,26 @@ object SingBoxConfigGenerator {
             localRuleSets = localRuleSets,
             remoteFallback = remoteRuleSetFallback,
         )
+        val adBlockPath = adBlockRuleSetPath?.takeIf {
+            settings.adBlockEnabled && it.isNotBlank()
+        }
 
         val generated = buildJsonObject {
             putJsonObject("log") {
                 put("level", logLevel)
                 put("timestamp", true)
             }
-            put("dns", buildDns(server, directDomains, vpnDomains, automaticTags, settings.ipv6Enabled))
+            put(
+                "dns",
+                buildDns(
+                    server = server,
+                    directDomains = directDomains,
+                    vpnDomains = vpnDomains,
+                    automaticTags = automaticTags,
+                    ipv6Enabled = settings.ipv6Enabled,
+                    adBlockEnabled = adBlockPath != null,
+                ),
+            )
             putJsonArray("inbounds") {
                 add(buildTun(settings.ipv6Enabled))
             }
@@ -147,6 +161,7 @@ object SingBoxConfigGenerator {
                     automaticTags = automaticTags,
                     localRuleSets = localRuleSets,
                     remoteRuleSetFallback = remoteRuleSetFallback,
+                    adBlockPath = adBlockPath,
                 ),
             )
             putJsonObject("experimental") {
@@ -167,6 +182,7 @@ object SingBoxConfigGenerator {
         vpnDomains: List<String>,
         automaticTags: List<String>,
         ipv6Enabled: Boolean,
+        adBlockEnabled: Boolean,
     ): JsonObject = buildJsonObject {
         putJsonArray("servers") {
             add(buildJsonObject {
@@ -190,6 +206,12 @@ object SingBoxConfigGenerator {
                     putJsonArray("domain_suffix") { directDomains.forEach { add(it) } }
                     put("action", "route")
                     put("server", "dns-direct")
+                })
+            }
+            if (adBlockEnabled) {
+                add(buildJsonObject {
+                    putJsonArray("rule_set") { add(AdBlockPolicy.TAG) }
+                    put("action", "reject")
                 })
             }
             if (vpnDomains.isNotEmpty()) {
@@ -336,6 +358,7 @@ object SingBoxConfigGenerator {
         automaticTags: List<String>,
         localRuleSets: Map<String, String>,
         remoteRuleSetFallback: Boolean,
+        adBlockPath: String?,
     ): JsonObject = buildJsonObject {
         put("default_domain_resolver", "dns-local")
         putJsonArray("rule_set") {
@@ -353,6 +376,14 @@ object SingBoxConfigGenerator {
                         put("download_detour", "proxy")
                         put("update_interval", RuleSetCatalog.UPDATE_INTERVAL)
                     }
+                })
+            }
+            if (!adBlockPath.isNullOrBlank()) {
+                add(buildJsonObject {
+                    put("tag", AdBlockPolicy.TAG)
+                    put("type", "local")
+                    put("format", "source")
+                    put("path", adBlockPath)
                 })
             }
         }
@@ -440,7 +471,14 @@ object SingBoxConfigGenerator {
                     put("udp_timeout", "5m")
                 })
             }
-            // 5. Automatic rule-set
+            // 5. AdGuard DNS filter (user domain DIRECT still wins as a whitelist)
+            if (!adBlockPath.isNullOrBlank()) {
+                add(buildJsonObject {
+                    putJsonArray("rule_set") { add(AdBlockPolicy.TAG) }
+                    put("action", "reject")
+                })
+            }
+            // 6. Automatic rule-set
             if (automaticTags.isNotEmpty()) {
                 // VLESS+Vision is TCP; QUIC/HTTP3 over xudp stalls (YouTube Music
                 // keeps the session open with no download while Telegram TCP works).

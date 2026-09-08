@@ -35,10 +35,12 @@ object DiagnosticReport {
             val localRuleSets = runCatching {
                 RuleSetDownloader(context).existingLocalCopies()
             }.getOrDefault(emptyMap())
+            val adBlockPath = container.adBlockDownloader.existingRuleSet()?.absolutePath
             runCatching {
                 container.repository.buildConfig(
                     localRuleSets = localRuleSets,
                     remoteRuleSetFallback = false,
+                    adBlockRuleSetPath = adBlockPath,
                 ).json
             }.getOrDefault("")
         }
@@ -74,7 +76,6 @@ object DiagnosticReport {
                 appendLine("ALPN: ${snapshot.settings.server.alpn}")
                 appendLine("Automatic lists: ${snapshot.settings.automaticRuleSetEnabled}")
                 appendLine("Ad block: ${snapshot.settings.adBlockEnabled}")
-                appendLine("Ad block interval days: ${snapshot.settings.adBlockUpdateIntervalDays}")
                 appendLine("Ad block bundled: ${AdBlockPolicy.BUNDLED_VERSION}")
                 appendLine("Ad block file: ${container.adBlockDownloader.debugSnapshot()}")
                 appendLine("Auto select server: ${snapshot.settings.autoSelectServerEnabled}")

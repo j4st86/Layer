@@ -3,11 +3,12 @@ package com.layer.app.data
 import android.content.Context
 import android.net.Network
 import com.layer.core.config.AdBlockPolicy
+import com.layer.core.config.AdGuardDnsFilter
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 
 data class AdBlockFetch(
     val path: String? = null,
@@ -23,18 +24,20 @@ data class AdBlockFetch(
 class AdBlockDownloader(context: Context) {
     private val app = context.applicationContext
     private val dir = File(app.filesDir, "adblock")
-    private val file get() = File(dir, AdBlockPolicy.fileName)
+    private val filterFile get() = File(dir, AdBlockPolicy.fileName)
+    private val ruleSetFile get() = File(dir, AdBlockPolicy.ruleSetFileName)
+    private val mutex = Mutex()
 
-    fun existingFile(): File? {
-        val local = file
-        return if (isUsable(local)) local else null
+    fun existingRuleSet(): File? {
+        val local = ruleSetFile
+        return if (isUsableRuleSet(local)) local else null
     }
 
     fun debugSnapshot(): String {
-        val local = existingFile() ?: return "missing"
+        val local = existingRuleSet() ?: return "missing"
         val ageMs = (System.currentTimeMillis() - local.lastModified()).coerceAtLeast(0L)
         val ageHours = ageMs / (60L * 60L * 1000L)
-        val version = readVersion(local)
+        val version = readVersion(filterFile)
         return buildString {
             append("${local.length()} bytes")
             if (version != null) append(" version=$version")
@@ -42,108 +45,82 @@ class AdBlockDownloader(context: Context) {
         }
     }
 
-    suspend fun ensureCopy(network: Network?, freshnessMs: Long): AdBlockFetch =
+    suspend fun ensureCopy(network: Network?): AdBlockFetch = mutex.withLock {
         withContext(Dispatchers.IO) {
             dir.mkdirs()
-            val local = file
-            if (isUsable(local) && System.currentTimeMillis() - local.lastModified() < freshnessMs) {
+            val json = ruleSetFile
+            val txt = filterFile
+            if (isFresh(json) && isUsableRuleSet(json)) {
                 return@withContext AdBlockFetch(
-                    path = local.absolutePath,
-                    bytes = local.length(),
+                    path = json.absolutePath,
+                    bytes = json.length(),
                     fromCache = true,
-                    version = readVersion(local),
+                    version = readVersion(txt),
                 )
             }
-            val error = download(AdBlockPolicy.listUrl, local, network)
-            if (error == null && isUsable(local)) {
-                return@withContext AdBlockFetch(
-                    path = local.absolutePath,
-                    bytes = local.length(),
-                    fromCache = false,
-                    version = readVersion(local),
+            var fromAssets = false
+            var error: String? = null
+            if (!isFresh(txt) || !isUsableFilter(txt)) {
+                error = RemoteFileFetcher.download(
+                    url = AdBlockPolicy.listUrl,
+                    destination = txt,
+                    network = network,
+                    minBytes = MIN_FILTER_BYTES,
+                    accept = "text/plain,*/*",
+                    htmlError = "HTML instead of filter",
                 )
+                if (!isUsableFilter(txt) && copyFromAssets(txt)) {
+                    fromAssets = true
+                }
             }
-            if (isUsable(local)) {
-                return@withContext AdBlockFetch(
-                    path = local.absolutePath,
-                    bytes = local.length(),
-                    fromCache = true,
-                    version = readVersion(local),
-                    error = error,
-                )
+            if (isUsableFilter(txt) && needsConvert(txt, json)) {
+                val converted = convert(txt, json)
+                if (converted != null) error = converted
             }
-            if (copyFromAssets(local)) {
+            if (isUsableRuleSet(json)) {
                 return@withContext AdBlockFetch(
-                    path = local.absolutePath,
-                    bytes = local.length(),
-                    fromAssets = true,
-                    version = readVersion(local) ?: AdBlockPolicy.BUNDLED_VERSION,
+                    path = json.absolutePath,
+                    bytes = json.length(),
+                    fromCache = error != null && !fromAssets,
+                    fromAssets = fromAssets,
+                    version = readVersion(txt) ?: AdBlockPolicy.BUNDLED_VERSION.takeIf { fromAssets },
                     error = error,
                 )
             }
             AdBlockFetch(error = error ?: "missing")
         }
+    }
+
+    private fun convert(txt: File, json: File): String? {
+        val parsed = runCatching {
+            txt.bufferedReader().use { AdGuardDnsFilter.parse(it) }
+        }.getOrElse { return RemoteFileFetcher.describe(it) }
+        if (parsed.block.size < MIN_PARSED_RULES) {
+            return "too few rules (${parsed.block.size})"
+        }
+        val written = RemoteFileFetcher.copyStream(
+            write = { tmp -> parsed.writeSourceJson(tmp) },
+            destination = json,
+            minBytes = MIN_RULESET_BYTES,
+        )
+        return if (written) null else "convert failed"
+    }
 
     private fun copyFromAssets(destination: File): Boolean {
         val assetPath = "${AdBlockPolicy.ASSET_DIR}/${AdBlockPolicy.fileName}"
-        return runCatching {
-            app.assets.open(assetPath).use { input ->
-                val tmp = File(destination.parentFile, destination.name + ".tmp")
-                tmp.outputStream().use { output -> input.copyTo(output) }
-                if (tmp.length() < MIN_BYTES) {
-                    tmp.delete()
-                    return false
+        return RemoteFileFetcher.copyStream(
+            write = { tmp ->
+                app.assets.open(assetPath).use { input ->
+                    tmp.outputStream().use { output -> input.copyTo(output) }
                 }
-                if (destination.exists()) destination.delete()
-                tmp.renameTo(destination)
-            }
-        }.getOrDefault(false)
-    }
-
-    private fun download(url: String, destination: File, network: Network?): String? {
-        val connection = runCatching {
-            val target = URL(url)
-            val opened = if (network != null) network.openConnection(target) else target.openConnection()
-            (opened as HttpURLConnection).apply {
-                instanceFollowRedirects = true
-                connectTimeout = 15_000
-                readTimeout = 60_000
-                requestMethod = "GET"
-                setRequestProperty(
-                    "User-Agent",
-                    "Mozilla/5.0 (Linux; Android 14; Pixel) AppleWebKit/537.36 " +
-                        "(KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36",
-                )
-                setRequestProperty("Accept", "text/plain,*/*")
-                setRequestProperty("Accept-Encoding", "identity")
-            }
-        }.getOrElse { error ->
-            return describe(error)
-        }
-        return try {
-            val code = connection.responseCode
-            val type = connection.contentType.orEmpty()
-            if (code !in 200..299) return "HTTP $code"
-            if (type.contains("text/html", ignoreCase = true)) return "HTML instead of filter"
-            val tmp = File(destination.parentFile, destination.name + ".tmp")
-            connection.inputStream.use { input ->
-                tmp.outputStream().use { output -> input.copyTo(output) }
-            }
-            if (tmp.length() < MIN_BYTES) {
-                tmp.delete()
-                return "too small"
-            }
-            if (destination.exists()) destination.delete()
-            if (!tmp.renameTo(destination)) return "save failed"
-            null
-        } catch (error: Exception) {
-            describe(error)
-        } finally {
-            connection.disconnect()
-        }
+            },
+            destination = destination,
+            minBytes = MIN_FILTER_BYTES,
+        )
     }
 
     private fun readVersion(local: File): String? {
+        if (!local.exists()) return null
         return runCatching {
             local.bufferedReader().use { reader ->
                 repeat(12) {
@@ -157,16 +134,24 @@ class AdBlockDownloader(context: Context) {
         }.getOrNull()
     }
 
-    private fun describe(error: Throwable): String {
-        val cls = error.javaClass.simpleName
-        val msg = error.message?.replace('\n', ' ')?.take(120).orEmpty()
-        return if (msg.isBlank()) cls else "$cls: $msg"
+    private fun needsConvert(txt: File, json: File): Boolean {
+        if (!isUsableRuleSet(json)) return true
+        return json.lastModified() < txt.lastModified()
     }
 
-    private fun isUsable(file: File): Boolean = file.exists() && file.length() >= MIN_BYTES
+    private fun isFresh(file: File): Boolean {
+        if (!file.exists()) return false
+        return System.currentTimeMillis() - file.lastModified() < AdBlockPolicy.FRESHNESS_MS
+    }
+
+    private fun isUsableFilter(file: File): Boolean = file.exists() && file.length() >= MIN_FILTER_BYTES
+
+    private fun isUsableRuleSet(file: File): Boolean = file.exists() && file.length() >= MIN_RULESET_BYTES
 
     companion object {
-        private const val MIN_BYTES = 50_000L
+        private const val MIN_FILTER_BYTES = 50_000L
+        private const val MIN_RULESET_BYTES = 10_000L
+        private const val MIN_PARSED_RULES = 1_000
 
         fun logLine(fetch: AdBlockFetch): String {
             val size = sizeLabel(fetch.bytes)

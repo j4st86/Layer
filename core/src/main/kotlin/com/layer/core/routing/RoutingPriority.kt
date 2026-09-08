@@ -7,7 +7,7 @@ package com.layer.core.routing
  * 2. Explicit user app VPN
  * 3. User domain DIRECT
  * 4. User domain VPN
- * 5. Automatic rule-set
+ * 5. Ad block, then automatic rule-set
  * 6. Local / private traffic
  * 7. Default DIRECT
  *
