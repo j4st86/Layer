@@ -55,6 +55,7 @@ class AutoServerSelector(
     private var lastGoodCurrentMs: Long? = null
     private var lastTransportKind = -1
     private var networkJob: Job? = null
+    private var handoffRetryJob: Job? = null
     private var wakeJob: Job? = null
     private var lastEvaluateElapsed = 0L
     private var lastNetworkChangeElapsed = 0L
@@ -165,6 +166,8 @@ class AutoServerSelector(
         monitorJob = null
         networkJob?.cancel()
         networkJob = null
+        handoffRetryJob?.cancel()
+        handoffRetryJob = null
         wakeJob?.cancel()
         wakeJob = null
     }
@@ -180,18 +183,21 @@ class AutoServerSelector(
         val from = lastTransportKind
         lastTransportKind = kind
         lastNetworkChangeElapsed = SystemClock.elapsedRealtime()
+        memory.replaceAll { _, value -> value.copy(consecutiveFailures = 0) }
         log("сеть ${transportLabel(from)} → ${transportLabel(kind)}, debounce ${AutoServerPolicy.networkChangeDebounceMs} ms")
         networkJob?.cancel()
+        handoffRetryJob?.cancel()
         networkJob = scope.launch {
             delay(AutoServerPolicy.networkChangeDebounceMs)
-            val snap = repository.currentSnapshot().settings
-            if (!snap.autoSelectServerEnabled) {
-                log("смена сети пропуск: автовыбор выключен")
-                return@launch
-            }
             val connected = vpnController.status.value.state == VpnConnectionState.CONNECTED
             if (!connected) {
                 log("смена сети пропуск: VPN ${vpnController.status.value.state}")
+                return@launch
+            }
+            vpnController.wakeAfterHandoff("wifi-cell")
+            val snap = repository.currentSnapshot().settings
+            if (!snap.autoSelectServerEnabled) {
+                log("смена сети: wake, автовыбор выключен")
                 return@launch
             }
             log("смена сети: проверка текущего")
@@ -301,7 +307,11 @@ class AutoServerSelector(
                 )
                 currentMs = VlessTcpProbe.measureMedian(current, network, diagnostics)
             }
-            remember(currentId, currentMs)
+            remember(
+                currentId,
+                currentMs,
+                countFailure = AutoServerPolicy.countMissTowardFailover(settling),
+            )
             if (currentMs != null) {
                 lastGoodCurrentMs = AutoServerPolicy.ewma(previousGood, currentMs)
                 val degraded = previousGood != null &&
@@ -325,6 +335,7 @@ class AutoServerSelector(
                             "($failures/${AutoServerPolicy.failuresBeforeFullScan})" +
                             (if (settling) ", ждём после смены сети" else ", не переключаем"),
                     )
+                    if (settling) scheduleHandoffRetry()
                     return@withLock
                 }
                 log("текущий недоступен ${current.visibleName()}, ищем другой")
@@ -465,15 +476,36 @@ class AutoServerSelector(
         return left.coerceAtLeast(0L)
     }
 
-    private fun remember(id: String, latencyMs: Long?) {
+    private fun remember(id: String, latencyMs: Long?, countFailure: Boolean = true) {
         val previous = memory[id]
-        val failures = if (latencyMs == null) (previous?.consecutiveFailures ?: 0) + 1 else 0
+        val failures = when {
+            latencyMs != null -> 0
+            !countFailure -> previous?.consecutiveFailures ?: 0
+            else -> (previous?.consecutiveFailures ?: 0) + 1
+        }
         memory[id] = ProbeMemory(
             latencyMs = latencyMs,
             reachable = latencyMs != null,
             checkedAtElapsed = SystemClock.elapsedRealtime(),
             consecutiveFailures = failures,
         )
+    }
+
+    private fun scheduleHandoffRetry() {
+        if (handoffRetryJob?.isActive == true) return
+        val wait = AutoServerPolicy.remainingSettlingMs(
+            SystemClock.elapsedRealtime(),
+            lastNetworkChangeElapsed,
+        ).coerceAtLeast(3_000L)
+        log("повтор через ${wait} ms после смены сети")
+        handoffRetryJob = scope.launch {
+            delay(wait)
+            if (vpnController.status.value.state != VpnConnectionState.CONNECTED) return@launch
+            log("повтор после смены сети")
+            vpnController.wakeAfterHandoff("wifi-cell-retry")
+            delay(400)
+            evaluateConnected(fullScan = false)
+        }
     }
 
     private suspend fun disableAuto(reason: String) {

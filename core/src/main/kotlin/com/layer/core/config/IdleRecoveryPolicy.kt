@@ -16,10 +16,15 @@ package com.layer.core.config
  *
  * [resetNetwork] is intentionally not an action: it cancels every in-flight dial.
  * [Wake] during that retry storm does the same, so recoveries are debounced.
+ *
+ * wifi→cell is a different event from SCREEN_ON. The 90s idle debounce must not
+ * swallow the handoff Wake: a screen-on 7s before Wi-Fi drop would otherwise
+ * leave the VLESS outbound bound to a dead iface until the next idle recover.
  */
 object IdleRecoveryPolicy {
     const val minUptimeMs = 4_000L
     const val debounceMs = 90_000L
+    const val handoffDebounceMs = 15_000L
 
     enum class Action { Skip, Wake }
 
@@ -35,6 +40,23 @@ object IdleRecoveryPolicy {
         if (nowElapsed - startedElapsed < minUptimeMs) return Action.Skip
         if (!hasNetwork) return Action.Skip
         if (lastRecoverElapsed > 0L && nowElapsed - lastRecoverElapsed < debounceMs) {
+            return Action.Skip
+        }
+        return Action.Wake
+    }
+
+    fun decideHandoff(
+        nowElapsed: Long,
+        startedElapsed: Long,
+        lastHandoffWakeElapsed: Long,
+        hasNetwork: Boolean = true,
+    ): Action {
+        if (startedElapsed <= 0L) return Action.Skip
+        if (nowElapsed - startedElapsed < minUptimeMs) return Action.Skip
+        if (!hasNetwork) return Action.Skip
+        if (lastHandoffWakeElapsed > 0L &&
+            nowElapsed - lastHandoffWakeElapsed < handoffDebounceMs
+        ) {
             return Action.Skip
         }
         return Action.Wake

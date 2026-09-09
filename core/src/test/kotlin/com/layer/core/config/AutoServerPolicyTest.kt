@@ -60,6 +60,10 @@ class AutoServerPolicyTest {
         assertFalse(AutoServerPolicy.isNetworkSettling(10_000L, 0L))
         assertTrue(AutoServerPolicy.isNetworkSettling(20_000L, 10_000L))
         assertFalse(AutoServerPolicy.isNetworkSettling(50_000L, 10_000L))
+        assertEquals(20_000L, AutoServerPolicy.remainingSettlingMs(20_000L, 10_000L))
+        assertEquals(0L, AutoServerPolicy.remainingSettlingMs(50_000L, 10_000L))
+        assertFalse(AutoServerPolicy.countMissTowardFailover(settling = true))
+        assertTrue(AutoServerPolicy.countMissTowardFailover(settling = false))
     }
 
     @Test

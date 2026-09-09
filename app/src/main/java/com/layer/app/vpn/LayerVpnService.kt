@@ -59,6 +59,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
     private var screenReceiver: BroadcastReceiver? = null
     private var startedElapsed = 0L
     private var lastIdleRecoverElapsed = 0L
+    private var lastHandoffWakeElapsed = 0L
     private var lastScreenOffElapsed = 0L
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -111,7 +112,13 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         }
     }
 
+    override fun onCreate() {
+        super.onCreate()
+        running = this
+    }
+
     override fun onDestroy() {
+        if (running === this) running = null
         stopVpn()
         scope.cancel()
         super.onDestroy()
@@ -504,6 +511,26 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         runCatching { commandServer?.wake() }
     }
 
+    fun recoverAfterHandoff(reason: String) {
+        if (stopping || commandServer == null) return
+        val now = SystemClock.elapsedRealtime()
+        val connectivity = getSystemService(ConnectivityManager::class.java)
+        val hasNetwork = UnderlyingDns.pickUnderlyingNetwork(connectivity) != null
+        val action = IdleRecoveryPolicy.decideHandoff(
+            nowElapsed = now,
+            startedElapsed = startedElapsed,
+            lastHandoffWakeElapsed = lastHandoffWakeElapsed,
+            hasNetwork = hasNetwork,
+        )
+        if (action == IdleRecoveryPolicy.Action.Skip) {
+            dbg("[VPN] recover skip handoff ($reason)")
+            return
+        }
+        lastHandoffWakeElapsed = now
+        dbg("[VPN] recover wake ($reason)")
+        runCatching { commandServer?.wake() }
+    }
+
     private fun registerIdleRecovery() {
         if (screenReceiver != null) return
         screenReceiver = object : BroadcastReceiver() {
@@ -728,6 +755,13 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         const val ACTION_RELOAD = "com.layer.app.RELOAD"
         const val ACTION_REWIRE = "com.layer.app.REWIRE"
         const val EXTRA_SERVER_NAME = "com.layer.app.EXTRA_SERVER_NAME"
+
+        @Volatile
+        private var running: LayerVpnService? = null
+
+        fun wakeAfterHandoff(reason: String) {
+            running?.recoverAfterHandoff(reason)
+        }
 
         fun start(context: Context, serverName: String = "") {
             val intent = Intent(context, LayerVpnService::class.java).setAction(ACTION_START)

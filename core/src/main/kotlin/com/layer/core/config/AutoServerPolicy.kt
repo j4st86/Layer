@@ -10,6 +10,11 @@ import kotlin.math.roundToLong
  * Soft switch requires 20% and [minSwitchDeltaMs], a confirm probe, cooldown,
  * and a quiet TUN. Failover needs two missed evaluates; a network change
  * settling window blocks force-switch so wifi↔cell timeouts do not tear TUN.
+ *
+ * DNS/TCP misses during that window are the new path settling, not a dead
+ * origin. They must not count toward failover, and a follow-up probe runs
+ * after settling instead of waiting for the 10-minute interval. Recovery is
+ * libbox Wake, never TUN reload.
  */
 object AutoServerPolicy {
     val intervalMinutes: List<Int> = listOf(10, 15, 20, 25, 30, 60)
@@ -80,4 +85,11 @@ object AutoServerPolicy {
         if (lastChangeElapsed <= 0L) return false
         return nowElapsed - lastChangeElapsed < networkSettlingMs
     }
+
+    fun remainingSettlingMs(nowElapsed: Long, lastChangeElapsed: Long): Long {
+        if (!isNetworkSettling(nowElapsed, lastChangeElapsed)) return 0L
+        return networkSettlingMs - (nowElapsed - lastChangeElapsed)
+    }
+
+    fun countMissTowardFailover(settling: Boolean): Boolean = !settling
 }

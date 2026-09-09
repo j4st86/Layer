@@ -110,7 +110,7 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
                 notifyInterfaceUpdate(cm, network, listener)
                 val validated = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
                 if (validated && !lastValidated) {
-                    service.recoverAfterIdle("network-validated")
+                    service.recoverAfterHandoff("network-validated")
                 }
                 lastValidated = validated
                 service.notifyAutoServerTransport(networkCapabilities)
@@ -131,6 +131,10 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
                     val fallback = underlyingNetwork
                     if (fallback != null) {
                         notifyInterfaceUpdate(cm, fallback, listener)
+                        service.recoverAfterHandoff("network-lost")
+                        cm.getNetworkCapabilities(fallback)?.let {
+                            service.notifyAutoServerTransport(it)
+                        }
                     } else {
                         listener.updateDefaultInterface("", -1, false, false)
                     }

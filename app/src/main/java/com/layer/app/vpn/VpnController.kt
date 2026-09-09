@@ -77,4 +77,12 @@ class VpnController(
             LayerVpnService.reload(context)
         }
     }
+
+    fun wakeAfterHandoff(reason: String) {
+        if (status.value.state == VpnConnectionState.CONNECTED ||
+            status.value.state == VpnConnectionState.RECONNECTING
+        ) {
+            LayerVpnService.wakeAfterHandoff(reason)
+        }
+    }
 }
