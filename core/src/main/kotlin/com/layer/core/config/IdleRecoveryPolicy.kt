@@ -41,14 +41,17 @@ object IdleRecoveryPolicy {
         screenOffElapsed: Long,
         longIdleReload: Boolean,
         hasNetwork: Boolean = true,
-    ): Action {
-        if (startedElapsed <= 0L) return Action.Skip
-        if (nowElapsed - startedElapsed < minUptimeMs) return Action.Skip
-        if (!hasNetwork) return Action.Skip
-        if (lastRecoverElapsed > 0L && nowElapsed - lastRecoverElapsed < debounceMs) {
-            return Action.Skip
-        }
-        return Action.Wake
+    ): Action = if (
+        skipReason(
+            nowElapsed = nowElapsed,
+            startedElapsed = startedElapsed,
+            lastRecoverElapsed = lastRecoverElapsed,
+            hasNetwork = hasNetwork,
+        ) == null
+    ) {
+        Action.Wake
+    } else {
+        Action.Skip
     }
 
     fun decideHandoff(
@@ -56,15 +59,59 @@ object IdleRecoveryPolicy {
         startedElapsed: Long,
         lastHandoffWakeElapsed: Long,
         hasNetwork: Boolean = true,
-    ): Action {
-        if (startedElapsed <= 0L) return Action.Skip
-        if (nowElapsed - startedElapsed < minUptimeMs) return Action.Skip
-        if (!hasNetwork) return Action.Skip
+    ): Action = if (
+        handoffSkipReason(
+            nowElapsed = nowElapsed,
+            startedElapsed = startedElapsed,
+            lastHandoffWakeElapsed = lastHandoffWakeElapsed,
+            hasNetwork = hasNetwork,
+        ) == null
+    ) {
+        Action.Wake
+    } else {
+        Action.Skip
+    }
+
+    /** Stable token for diagnostic logs. Null means Wake. */
+    fun skipReason(
+        nowElapsed: Long,
+        startedElapsed: Long,
+        lastRecoverElapsed: Long,
+        hasNetwork: Boolean = true,
+    ): String? {
+        if (startedElapsed <= 0L) return "vpn-not-started"
+        if (nowElapsed - startedElapsed < minUptimeMs) return "uptime"
+        if (!hasNetwork) return "no-network"
+        if (lastRecoverElapsed > 0L && nowElapsed - lastRecoverElapsed < debounceMs) {
+            return "debounce"
+        }
+        return null
+    }
+
+    fun handoffSkipReason(
+        nowElapsed: Long,
+        startedElapsed: Long,
+        lastHandoffWakeElapsed: Long,
+        hasNetwork: Boolean = true,
+    ): String? {
+        if (startedElapsed <= 0L) return "vpn-not-started"
+        if (nowElapsed - startedElapsed < minUptimeMs) return "uptime"
+        if (!hasNetwork) return "no-network"
         if (lastHandoffWakeElapsed > 0L &&
             nowElapsed - lastHandoffWakeElapsed < handoffDebounceMs
         ) {
-            return Action.Skip
+            return "debounce"
         }
-        return Action.Wake
+        return null
+    }
+
+    fun remainingDebounceMs(nowElapsed: Long, lastElapsed: Long, windowMs: Long): Long {
+        if (lastElapsed <= 0L) return 0L
+        return (windowMs - (nowElapsed - lastElapsed)).coerceAtLeast(0L)
+    }
+
+    fun sinceLastLabel(nowElapsed: Long, lastElapsed: Long): String {
+        if (lastElapsed <= 0L) return "never"
+        return (nowElapsed - lastElapsed).toString()
     }
 }

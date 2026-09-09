@@ -16,7 +16,7 @@ data class DiagnosticEntry(
 )
 
 class DiagnosticLog {
-    private val formatter = SimpleDateFormat("HH:mm:ss.SSS", Locale("ru"))
+    private val formatter = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
     private val _entries = MutableStateFlow<List<DiagnosticEntry>>(emptyList())
     val entries: StateFlow<List<DiagnosticEntry>> = _entries.asStateFlow()
 
@@ -31,7 +31,7 @@ class DiagnosticLog {
         if (clean.isBlank()) return
         Log.i(TAG, clean)
         val entry = DiagnosticEntry(formatter.format(Date()), clean)
-        _entries.update { current -> (current + entry).takeLast(MAX_ENTRIES) }
+        _entries.update { current -> trimOldest(current + entry) }
     }
 
     fun exportText(): String {
@@ -44,8 +44,34 @@ class DiagnosticLog {
         lastStartedConfig = ""
     }
 
+    private fun trimOldest(entries: List<DiagnosticEntry>): List<DiagnosticEntry> {
+        if (entries.size <= MAX_ENTRIES && exportedBytes(entries) <= MAX_BYTES) {
+            return entries
+        }
+        var drop = 0
+        var bytes = exportedBytes(entries)
+        val last = entries.lastIndex
+        while (drop < last && (entries.size - drop > MAX_ENTRIES || bytes > MAX_BYTES)) {
+            bytes -= exportedBytes(entries[drop])
+            drop++
+        }
+        return if (drop == 0) entries else entries.subList(drop, entries.size).toList()
+    }
+
     companion object {
         const val TAG = "Layer"
-        private const val MAX_ENTRIES = 4000
+        private const val MAX_ENTRIES = 15_000
+        private const val MAX_BYTES = 1_500_000
+
+        private fun exportedBytes(entry: DiagnosticEntry): Int {
+            // "HH:mm:ss.SSS  message\n" in the report. ASCII logs are 1 byte/char.
+            return entry.time.length + 2 + entry.message.length + 1
+        }
+
+        private fun exportedBytes(entries: List<DiagnosticEntry>): Int {
+            var total = 0
+            for (entry in entries) total += exportedBytes(entry)
+            return total
+        }
     }
 }

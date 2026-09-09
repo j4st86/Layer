@@ -50,7 +50,7 @@ class VpnController(
         val config = repository.buildConfig()
         if (!config.isSuccess) {
             val message = config.error ?: context.getString(R.string.error_config)
-            diagnostics.append(message)
+            diagnostics.append("[VPN] event=connect-skip reason=bad-config raw=$message")
             VpnStatusStore.update(
                 VpnUiStatus(
                     state = VpnConnectionState.ERROR,

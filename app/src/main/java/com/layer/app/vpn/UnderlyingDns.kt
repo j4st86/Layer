@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import com.layer.core.i18n.copy
 import java.net.Inet4Address
 import java.net.InetAddress
 
@@ -51,7 +50,7 @@ object UnderlyingDns {
 
     fun resolve(context: Context, host: String): HostResolveResult {
         val trimmed = host.trim()
-        if (trimmed.isEmpty()) return HostResolveResult(null, copy("empty name", "пустое имя"))
+        if (trimmed.isEmpty()) return HostResolveResult(null, "empty-name")
         if (isIpv4(trimmed)) return HostResolveResult(trimmed)
 
         val connectivity = context.getSystemService(ConnectivityManager::class.java)
@@ -75,7 +74,7 @@ object UnderlyingDns {
 
         return HostResolveResult(
             ip = null,
-            error = errors.joinToString("; ").ifBlank { copy("empty DNS response", "пустой ответ DNS") },
+            error = errors.joinToString("; ").ifBlank { "empty-dns-response" },
         )
     }
 

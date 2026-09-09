@@ -189,31 +189,22 @@ class AdBlockDownloader(context: Context) {
         private const val MIN_PARSED_RULES = 1_000
 
         fun logLine(fetch: AdBlockFetch): String {
-            val size = sizeLabel(fetch.bytes)
-            val version = fetch.version?.let { " $it" }.orEmpty()
-            val wifi = if (fetch.waitForWifi) " (скачивание только по Wi‑Fi)" else ""
+            val version = fetch.version?.let { " version=$it" }.orEmpty()
+            val wifi = if (fetch.waitForWifi) " wifiOnly=true" else ""
+            val err = fetch.error?.let { " error=$it" }.orEmpty()
             return when {
                 !fetch.isPresent ->
-                    "[ADS] DNS-фильтр рекламы нет" + fetch.error?.let { ": $it" }.orEmpty() + wifi
+                    "[ADS] event=fetch source=none bytes=0$err$wifi"
                 fetch.fromAssets ->
-                    "[ADS] DNS-фильтр рекламы из APK (${AdBlockPolicy.BUNDLED_VERSION}) $size$version" +
-                        fetch.error?.let { ", сеть: $it" }.orEmpty() + wifi
+                    "[ADS] event=fetch source=apk bundled=${AdBlockPolicy.BUNDLED_VERSION} " +
+                        "bytes=${fetch.bytes}$version$err$wifi"
                 fetch.fromCache && fetch.error != null ->
-                    "[ADS] DNS-фильтр рекламы кэш $size$version (${fetch.error})$wifi"
+                    "[ADS] event=fetch source=cache bytes=${fetch.bytes}$version$err$wifi"
                 fetch.fromCache ->
-                    "[ADS] DNS-фильтр рекламы свежий $size$version$wifi"
+                    "[ADS] event=fetch source=cache bytes=${fetch.bytes}$version$wifi"
                 else ->
-                    "[ADS] DNS-фильтр рекламы скачан $size$version"
+                    "[ADS] event=fetch source=download bytes=${fetch.bytes}$version$wifi"
             }
-        }
-
-        private fun sizeLabel(bytes: Long): String {
-            if (bytes >= 1_000_000L) {
-                val mb = bytes / 1_000_000.0
-                return String.format(java.util.Locale.US, "%.1f МБ", mb)
-            }
-            if (bytes >= 1_000L) return "${bytes / 1_000L} КБ"
-            return "$bytes Б"
         }
     }
 }

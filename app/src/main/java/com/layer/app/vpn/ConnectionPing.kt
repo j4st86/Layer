@@ -2,7 +2,6 @@ package com.layer.app.vpn
 
 import com.layer.app.data.LayerRepository
 import com.layer.app.diagnostics.DiagnosticLog
-import com.layer.core.i18n.copy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -54,14 +53,12 @@ class ConnectionPing(
     suspend fun measureCurrent(reason: String) {
         mutex.withLock {
             val server = repository.currentSnapshot().settings.activeServer() ?: run {
-                diagnostics.append(
-                    "[PING] $reason: " + copy("no active server", "нет активного сервера"),
-                )
+                diagnostics.append("[PING] event=skip trigger=$reason why=no-active-server")
                 _status.value = ConnectionPingUi()
                 return@withLock
             }
             _status.value = _status.value.copy(probing = true)
-            diagnostics.append("[PING] $reason ${server.visibleName()}")
+            diagnostics.append("[PING] event=start trigger=$reason server=${server.visibleName()}")
             // Layer is excluded from its own VPN, so the default route already
             // uses the underlying network. Binding to it after TUN is up gets
             // EPERM on Pixel / Android 15+.

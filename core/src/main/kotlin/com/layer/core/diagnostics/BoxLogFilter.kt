@@ -2,7 +2,7 @@ package com.layer.core.diagnostics
 
 /**
  * sing-box debug/trace logs every TUN packet. Telegram's reconnect storm then
- * wipes the 4000-line diagnostic buffer, so overnight [VPN]/[AUTO] history is gone.
+ * wipes the diagnostic buffer, so overnight [VPN]/[AUTO] history is gone.
  */
 object BoxLogFilter {
     private val noisyInfo = listOf(

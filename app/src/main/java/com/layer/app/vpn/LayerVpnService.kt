@@ -83,7 +83,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
                 return START_STICKY
             }
             ACTION_REWIRE -> {
-                dbg("[VPN] rewire (notification)")
+                dbg("[VPN] event=rewire source=notification")
                 scope.launch { reloadInternal() }
                 return START_STICKY
             }
@@ -96,7 +96,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
                         state == VpnConnectionState.CONNECTING ||
                         state == VpnConnectionState.RECONNECTING)
                 ) {
-                    dbg("[VPN] start пропуск, уже $state")
+                    dbg("[VPN] event=start action=skip reason=already-running state=$state")
                     return START_STICKY
                 }
                 scope.launch { startVpn() }
@@ -143,7 +143,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
                 already == VpnConnectionState.CONNECTING ||
                 already == VpnConnectionState.RECONNECTING)
         ) {
-            dbg("[VPN] startVpn пропуск, уже $already")
+            dbg("[VPN] event=start action=skip reason=already-running state=$already")
             return
         }
         var settings = container.repository.currentSnapshot().settings
@@ -151,7 +151,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         val autoPick = settings.autoSelectServerEnabled &&
             AutoServerPolicy.canEnable(settings.servers.size)
         dbg(
-            "[AUTO] startVpn auto=${settings.autoSelectServerEnabled} " +
+            "[AUTO] event=startVpn auto=${settings.autoSelectServerEnabled} " +
                 "servers=${settings.servers.size} pick=$autoPick",
         )
         updateStatus(
@@ -161,12 +161,12 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         if (autoPick) {
             container.autoServerSelector.prepareBestServer()
             settings = container.repository.currentSnapshot().settings
-            dbg("[AUTO] startVpn после выбора ${settings.activeConnectionName()}")
+            dbg("[AUTO] event=startVpn action=after-pick server=${settings.activeConnectionName()}")
         }
         serverName = settings.activeConnectionName()
         val host = settings.server.address
         dbg(
-            "[VPN] start server=${settings.activeConnectionName()} " +
+            "[VPN] event=start server=${settings.activeConnectionName()} " +
                 "host=$host:${settings.server.port} sni=${settings.server.serverName} " +
                 "security=${settings.server.security} fp=${settings.server.fingerprint} " +
                 "flow=${settings.server.flow} network=${settings.server.network} " +
@@ -174,15 +174,18 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         )
         val resolved = UnderlyingDns.resolve(this, host)
         if (resolved.ip != null) {
-            dbg("[DNS] сервер $host → ${resolved.ip}")
+            dbg("[DNS] event=pre-resolve host=$host ip=${resolved.ip}")
         } else {
             dbg(
-                "[DNS] не удалось заранее разрешить $host" +
-                    (resolved.error?.let { ": $it" } ?: ""),
+                "[DNS] event=pre-resolve host=$host ip=miss" +
+                    (resolved.error?.let { " error=$it" } ?: ""),
             )
         }
         if (settings.server.isReality) {
-            dbg("[VPN] Reality dest/SNI=${settings.server.serverName} fp=${settings.server.fingerprint} sid=${settings.server.shortId.isNotBlank()}")
+            dbg(
+                "[VPN] event=reality dest=${settings.server.serverName} " +
+                    "fp=${settings.server.fingerprint} sid=${settings.server.shortId.isNotBlank()}",
+            )
         }
         if (stopping) return
         val prepared = prepareLists()
@@ -201,14 +204,14 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         container.diagnostics.lastStartedConfig = LogSanitizer.sanitize(generated.json)
         try {
             runCatching { Libbox.checkConfig(generated.json) }
-                .onSuccess { dbg("[CFG] checkConfig ok, json=${generated.json.length} байт") }
+                .onSuccess { dbg("[CFG] event=check-config ok bytes=${generated.json.length}") }
                 .onFailure { error ->
                     fail(error.message ?: getString(R.string.error_config_singbox))
                     return
                 }
             if (stopping) return
             commandServer = ensureCommandServer()
-            dbg("[VPN] startOrReloadService…")
+            dbg("[VPN] event=start-or-reload")
             commandServer?.startOrReloadService(generated.json, OverrideOptions())
             if (stopping) return
             startedElapsed = SystemClock.elapsedRealtime()
@@ -216,11 +219,11 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             lastScreenOffElapsed = 0L
             registerIdleRecovery()
             updateStatus(VpnConnectionState.CONNECTED, getString(R.string.status_connected))
-            dbg("[VPN] ядро сообщило, что сервис запущен")
+            dbg("[VPN] event=core-started")
             if (settings.autoSelectServerEnabled && AutoServerPolicy.canEnable(settings.servers.size)) {
                 container.autoServerSelector.startMonitoring()
             } else if (settings.autoSelectServerEnabled) {
-                dbg("[AUTO] мониторинг не стартовал: серверов ${settings.servers.size}")
+                dbg("[AUTO] event=monitor action=skip reason=too-few-servers count=${settings.servers.size}")
             }
             container.connectionPing.measureAfterConnected("connected")
             tryPromoteRuleSetsViaProxy(resolved.ip, prepared)
@@ -234,12 +237,14 @@ class LayerVpnService : VpnService(), CommandServerHandler {
     private suspend fun reloadInternalLocked() {
         if (stopping) return
         if (commandServer == null) {
+            dbg("[VPN] event=reload action=start-vpn reason=no-command-server")
             startVpnLocked()
             return
         }
         val settings = container.repository.currentSnapshot().settings
         if (stopping) return
         serverName = settings.activeConnectionName()
+        dbg("[VPN] event=reload server=$serverName")
         updateStatus(VpnConnectionState.RECONNECTING, getString(R.string.status_reconnecting))
         val host = settings.server.address
         val resolved = UnderlyingDns.resolve(this, host)
@@ -269,7 +274,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             lastScreenOffElapsed = 0L
             registerIdleRecovery()
             updateStatus(VpnConnectionState.CONNECTED, getString(R.string.status_connected))
-            dbg("[VPN] reload startOrReloadService ok")
+            dbg("[VPN] event=reload ok")
             container.diagnostics.lastStartedConfig = LogSanitizer.sanitize(generated.json)
             container.connectionPing.measureAfterConnected("reconnect")
             // Idle/settings reload already includes remote lists when local
@@ -300,10 +305,10 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             commandServer?.startOrReloadService(withRemote.json, OverrideOptions())
         }
         if (promoted.isSuccess) {
-            dbg("[RULE] remote rule-sets подняты через proxy")
+            dbg("[RULE] event=promote action=ok via=proxy")
             return
         }
-        dbg("[RULE] remote через proxy не вышли: ${promoted.exceptionOrNull()?.message}")
+        dbg("[RULE] event=promote action=fail via=proxy error=${promoted.exceptionOrNull()?.message}")
 
         val withoutRemote = container.repository.buildConfig(
             resolvedIp,
@@ -318,18 +323,18 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         }
         if (reverted.isFailure) {
             dbg(
-                "[RULE] откат после списков не вышел: ${reverted.exceptionOrNull()?.message}. " +
-                    "VPN уже был поднят — оставляем как есть.",
+                "[RULE] event=promote action=revert-fail " +
+                    "error=${reverted.exceptionOrNull()?.message} keep=running-config",
             )
             return
         }
-        dbg("[RULE] списки через VPN не загрузились, работаем без автосписков")
+        dbg("[RULE] event=promote action=reverted reason=remote-lists-failed")
     }
 
     private fun ensureCommandServer(): CommandServer {
         commandServer?.let { return it }
         val iface = platform ?: SingBoxPlatform(this).also { platform = it }
-        dbg("[BOX] CommandServer start, libbox=${Branding.libboxVersion(runCatching { Libbox.version() }.getOrNull())}")
+        dbg("[BOX] event=command-server-start libbox=${Branding.libboxVersion(runCatching { Libbox.version() }.getOrNull())}")
         val server = CommandServer(this, iface)
         server.start()
         commandServer = server
@@ -348,12 +353,12 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         val client = CommandClient(SingBoxLogBridge(container.diagnostics), options)
         val connected = runCatching { client.connect() }
         if (connected.isFailure) {
-            dbg("[BOX] log client connect failed: ${connected.exceptionOrNull()?.message}")
+            dbg("[BOX] event=log-client action=fail error=${connected.exceptionOrNull()?.message}")
             runCatching { client.connect() }
-                .onFailure { dbg("[BOX] log client retry failed: ${it.message}") }
-                .onSuccess { dbg("[BOX] log client retry ok") }
+                .onFailure { dbg("[BOX] event=log-client action=retry-fail error=${it.message}") }
+                .onSuccess { dbg("[BOX] event=log-client action=retry-ok") }
         } else {
-            dbg("[BOX] log client connect ok")
+            dbg("[BOX] event=log-client action=ok")
         }
         logClient = client
     }
@@ -361,7 +366,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
     private fun stopVpn() {
         if (stopping) return
         stopping = true
-        dbg("[VPN] stop")
+        dbg("[VPN] event=stop")
         container.autoServerSelector.stopMonitoring()
         container.connectionPing.clear()
         unregisterIdleRecovery()
@@ -393,12 +398,26 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         val settings = container.repository.currentSnapshot().settings
         val connectivity = getSystemService(ConnectivityManager::class.java)
         val network = UnderlyingDns.pickUnderlyingNetwork(connectivity)
+        dbg(
+            "[RULE] event=prepare ads=${settings.adBlockEnabled} " +
+                "auto=${settings.automaticRuleSetEnabled}",
+        )
         return supervisorScope {
             val ruleSets = async {
-                if (!settings.automaticRuleSetEnabled) emptyMap() else fetchRuleSets(network)
+                if (!settings.automaticRuleSetEnabled) {
+                    dbg("[RULE] event=skip reason=disabled")
+                    emptyMap()
+                } else {
+                    fetchRuleSets(network)
+                }
             }
             val ads = async {
-                if (!settings.adBlockEnabled) null else fetchAdBlock(network)
+                if (!settings.adBlockEnabled) {
+                    dbg("[ADS] event=skip reason=disabled")
+                    null
+                } else {
+                    fetchAdBlock(network)
+                }
             }
             PreparedLists(ruleSets.await(), ads.await())
         }
@@ -413,17 +432,20 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         dbg(
             when {
                 fetched.seededFromAssets > 0 && local.size == total ->
-                    "[RULE] списки из APK (${RuleSetCatalog.BUNDLED_RELEASE}), GitHub недоступен"
-                local.size == total -> "[RULE] списки доменов скачаны напрямую (${local.size})"
+                    "[RULE] event=fetch source=apk release=${RuleSetCatalog.BUNDLED_RELEASE} " +
+                        "count=$total github=miss"
+                local.size == total ->
+                    "[RULE] event=fetch source=direct count=${local.size}"
                 local.isEmpty() ->
-                    "[RULE] списки доменов напрямую недоступны" +
-                        (fetched.error?.let { ": $it" } ?: "")
+                    "[RULE] event=fetch source=none count=0" +
+                        (fetched.error?.let { " error=$it" } ?: "")
                 fetched.seededFromAssets > 0 ->
-                    "[RULE] списки: ${local.size} (из них ${fetched.seededFromAssets} из APK), $missing нет" +
-                        (fetched.error?.let { " ($it)" } ?: "")
+                    "[RULE] event=fetch source=mixed count=${local.size} " +
+                        "fromApk=${fetched.seededFromAssets} missing=$missing" +
+                        (fetched.error?.let { " error=$it" } ?: "")
                 else ->
-                    "[RULE] списки: ${local.size} напрямую, $missing нет" +
-                        (fetched.error?.let { " ($it)" } ?: "")
+                    "[RULE] event=fetch source=partial count=${local.size} missing=$missing" +
+                        (fetched.error?.let { " error=$it" } ?: "")
             },
         )
         return local
@@ -447,13 +469,10 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         if (stopping) return
         val mapped = ErrorMapper.map(raw)
         val sanitizedRaw = LogSanitizer.sanitize(raw)
-        container.diagnostics.append(mapped.title)
-        if (mapped.details.isNotBlank()) {
-            container.diagnostics.append(mapped.details)
-        }
-        if (sanitizedRaw.isNotBlank() && sanitizedRaw != mapped.title && sanitizedRaw != mapped.details) {
-            container.diagnostics.append(sanitizedRaw)
-        }
+        dbg(
+            "[VPN] event=fail kind=${mapped.kind} " +
+                "raw=${sanitizedRaw.ifBlank { "-" }}",
+        )
         stopping = true
         container.autoServerSelector.stopMonitoring()
         container.connectionPing.clear()
@@ -491,49 +510,81 @@ class LayerVpnService : VpnService(), CommandServerHandler {
     }
 
     fun recoverAfterIdle(reason: String, longIdleReload: Boolean = false) {
-        if (stopping || commandServer == null) return
+        if (stopping || commandServer == null) {
+            dbg(
+                "[VPN] event=recover path=idle action=skip reason=$reason " +
+                    "why=${if (stopping) "stopping" else "no-command-server"}",
+            )
+            return
+        }
         val now = SystemClock.elapsedRealtime()
         val connectivity = getSystemService(ConnectivityManager::class.java)
         val hasNetwork = UnderlyingDns.pickUnderlyingNetwork(connectivity) != null
-        val action = IdleRecoveryPolicy.decide(
+        val why = IdleRecoveryPolicy.skipReason(
             nowElapsed = now,
             startedElapsed = startedElapsed,
             lastRecoverElapsed = lastIdleRecoverElapsed,
-            screenOffElapsed = lastScreenOffElapsed,
-            longIdleReload = longIdleReload,
             hasNetwork = hasNetwork,
         )
-        if (action == IdleRecoveryPolicy.Action.Skip) {
-            if (!hasNetwork) {
-                dbg("[VPN] recover skip no-network ($reason)")
-            }
+        if (why != null) {
+            val remaining = IdleRecoveryPolicy.remainingDebounceMs(
+                now,
+                lastIdleRecoverElapsed,
+                IdleRecoveryPolicy.debounceMs,
+            )
+            dbg(
+                "[VPN] event=recover path=idle action=skip reason=$reason why=$why " +
+                    "hasNetwork=$hasNetwork sinceLastMs=${IdleRecoveryPolicy.sinceLastLabel(now, lastIdleRecoverElapsed)} " +
+                    "remainingMs=$remaining",
+            )
             return
         }
+        val sinceLast = IdleRecoveryPolicy.sinceLastLabel(now, lastIdleRecoverElapsed)
         lastIdleRecoverElapsed = now
         if (longIdleReload) {
             lastScreenOffElapsed = 0L
         }
-        dbg("[VPN] recover wake ($reason)")
+        dbg(
+            "[VPN] event=recover path=idle action=wake reason=$reason hasNetwork=$hasNetwork " +
+                "sinceLastMs=$sinceLast",
+        )
         runCatching { commandServer?.wake() }
     }
 
     fun recoverAfterHandoff(reason: String) {
-        if (stopping || commandServer == null) return
+        if (stopping || commandServer == null) {
+            dbg(
+                "[VPN] event=recover path=handoff action=skip reason=$reason " +
+                    "why=${if (stopping) "stopping" else "no-command-server"}",
+            )
+            return
+        }
         val now = SystemClock.elapsedRealtime()
         val connectivity = getSystemService(ConnectivityManager::class.java)
         val hasNetwork = UnderlyingDns.pickUnderlyingNetwork(connectivity) != null
-        val action = IdleRecoveryPolicy.decideHandoff(
+        val why = IdleRecoveryPolicy.handoffSkipReason(
             nowElapsed = now,
             startedElapsed = startedElapsed,
             lastHandoffWakeElapsed = lastHandoffWakeElapsed,
             hasNetwork = hasNetwork,
         )
-        if (action == IdleRecoveryPolicy.Action.Skip) {
-            dbg("[VPN] recover skip handoff ($reason)")
+        if (why != null) {
+            val remaining = IdleRecoveryPolicy.remainingDebounceMs(
+                now,
+                lastHandoffWakeElapsed,
+                IdleRecoveryPolicy.handoffDebounceMs,
+            )
+            dbg(
+                "[VPN] event=recover path=handoff action=skip reason=$reason why=$why " +
+                    "hasNetwork=$hasNetwork sinceLastMs=${IdleRecoveryPolicy.sinceLastLabel(now, lastHandoffWakeElapsed)} " +
+                    "remainingMs=$remaining",
+            )
             return
         }
         lastHandoffWakeElapsed = now
-        dbg("[VPN] recover wake ($reason)")
+        dbg(
+            "[VPN] event=recover path=handoff action=wake reason=$reason hasNetwork=$hasNetwork",
+        )
         runCatching { commandServer?.wake() }
     }
 
@@ -544,17 +595,26 @@ class LayerVpnService : VpnService(), CommandServerHandler {
                 when (intent?.action) {
                     Intent.ACTION_SCREEN_OFF -> {
                         lastScreenOffElapsed = SystemClock.elapsedRealtime()
+                        dbg("[VPN] event=screen action=off")
                         startIdlePoke()
                     }
                     Intent.ACTION_SCREEN_ON,
                     Intent.ACTION_USER_PRESENT,
                     -> {
+                        dbg(
+                            "[VPN] event=screen action=" +
+                                if (intent.action == Intent.ACTION_USER_PRESENT) "user-present" else "on",
+                        )
                         stopIdlePoke()
-                        recoverAfterIdle(intent.action ?: "screen", longIdleReload = true)
+                        recoverAfterIdle(
+                            if (intent.action == Intent.ACTION_USER_PRESENT) "user-present" else "screen-on",
+                            longIdleReload = true,
+                        )
                         container.autoServerSelector.onDeviceBecameInteractive()
                     }
                     PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED -> {
                         val idle = getSystemService(PowerManager::class.java).isDeviceIdleMode
+                        dbg("[VPN] event=idle-mode on=$idle")
                         if (idle) {
                             if (lastScreenOffElapsed == 0L) {
                                 lastScreenOffElapsed = SystemClock.elapsedRealtime()
@@ -585,6 +645,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
     private fun startIdlePoke() {
         if (stopping || commandServer == null) return
         if (idlePokeJob?.isActive == true) return
+        dbg("[VPN] event=idle-poke action=start intervalMs=${IdleRecoveryPolicy.idlePokeMs}")
         idlePokeJob = scope.launch {
             while (isActive) {
                 delay(IdleRecoveryPolicy.idlePokeMs)
@@ -595,6 +656,9 @@ class LayerVpnService : VpnService(), CommandServerHandler {
     }
 
     private fun stopIdlePoke() {
+        if (idlePokeJob != null) {
+            dbg("[VPN] event=idle-poke action=stop")
+        }
         idlePokeJob?.cancel()
         idlePokeJob = null
     }
@@ -655,7 +719,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             }
             if (dnsServers.isEmpty()) {
                 dnsServers += listOf("1.1.1.1", "8.8.8.8")
-                note("[TUN] libbox не дал DNS — ставлю 1.1.1.1 и 8.8.8.8")
+                note("[TUN] dns fallback=1.1.1.1,8.8.8.8 reason=libbox-empty")
             }
             dnsServers.forEach { server ->
                 builder.addDnsServer(server)
@@ -670,7 +734,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
                     }
                 } else {
                     builder.addRoute("0.0.0.0", 0)
-                    note("[TUN] route 0.0.0.0/0 (fallback, inet4RouteAddress пуст)")
+                    note("[TUN] route 0.0.0.0/0 fallback reason=inet4RouteAddress-empty")
                 }
                 val inet6Routes = drainPrefixes(options.inet6RouteAddress)
                 if (inet6Routes.isNotEmpty()) {

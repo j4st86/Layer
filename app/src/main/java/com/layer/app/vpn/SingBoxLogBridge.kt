@@ -18,17 +18,20 @@ class SingBoxLogBridge(private val diagnostics: DiagnosticLog) : CommandClientHa
     override fun clearLogs() = Unit
 
     override fun connected() {
-        diagnostics.append("[BOX] поток логов sing-box подключён")
+        diagnostics.append("[BOX] event=log-stream action=connected")
     }
 
     override fun disconnected(message: String?) {
-        diagnostics.append("[BOX] поток логов отключён${message?.let { ": $it" } ?: ""}")
+        diagnostics.append(
+            "[BOX] event=log-stream action=disconnected" +
+                (message?.let { " error=$it" } ?: ""),
+        )
     }
 
     override fun initializeClashMode(modeList: StringIterator?, currentMode: String?) = Unit
 
     override fun setDefaultLogLevel(level: Int) {
-        diagnostics.append("[BOX] уровень логов ядра=$level (${levelName(level)})")
+        diagnostics.append("[BOX] event=log-level level=$level name=${levelName(level)}")
     }
 
     override fun updateClashMode(mode: String?) = Unit
@@ -52,7 +55,7 @@ class SingBoxLogBridge(private val diagnostics: DiagnosticLog) : CommandClientHa
                 BoxLogRateLimiter.Decision.Emit ->
                     diagnostics.append("[BOX:$level] $text")
                 is BoxLogRateLimiter.Decision.EmitHidden ->
-                    diagnostics.append("[BOX:$level] $text (+${decision.count} похожих скрыто)")
+                    diagnostics.append("[BOX:$level] $text (+${decision.count} similar hidden)")
             }
         }
     }

@@ -51,7 +51,7 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
         service.protect(fd)
         protectCount += 1
         if (protectCount <= 25 || protectCount % 50 == 0) {
-            service.dbg("[NET] protect fd=$fd count=$protectCount")
+            service.dbg("[NET] event=protect fd=$fd count=$protectCount")
         }
     }
 
@@ -89,15 +89,21 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
         val first = underlyingNetwork
         if (first != null) {
             val name = cm.getLinkProperties(first)?.interfaceName.orEmpty()
-            service.dbg("[NET] underlying=$name")
+            service.dbg("[NET] event=underlying iface=$name")
             notifyInterfaceUpdate(cm, first, listener)
         } else {
-            service.dbg("[NET] underlying network not found")
+            service.dbg("[NET] event=underlying iface=none")
         }
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
                 if (!isUnderlying(cm, network)) return
                 if (!UnderlyingDns.shouldUseAsUnderlying(cm, underlyingNetwork, network)) return
+                val name = cm.getLinkProperties(network)?.interfaceName.orEmpty()
+                val caps = cm.getNetworkCapabilities(network)
+                val transport = caps?.let {
+                    AutoServerSelector.transportLabel(AutoServerSelector.transportKind(it))
+                } ?: "unknown"
+                service.dbg("[NET] event=available iface=$name transport=$transport")
                 underlyingNetwork = network
                 notifyInterfaceUpdate(cm, network, listener)
                 cm.getNetworkCapabilities(network)?.let { service.notifyAutoServerTransport(it) }
@@ -110,6 +116,8 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
                 notifyInterfaceUpdate(cm, network, listener)
                 val validated = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
                 if (validated && !lastValidated) {
+                    val name = cm.getLinkProperties(network)?.interfaceName.orEmpty()
+                    service.dbg("[NET] event=validated iface=$name")
                     service.recoverAfterHandoff("network-validated")
                 }
                 lastValidated = validated
@@ -126,16 +134,24 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
 
             override fun onLost(network: Network) {
                 if (underlyingNetwork == network) {
+                    val lostName = cm.getLinkProperties(network)?.interfaceName.orEmpty()
                     lastValidated = false
                     underlyingNetwork = UnderlyingDns.pickUnderlyingNetwork(cm)
                     val fallback = underlyingNetwork
                     if (fallback != null) {
+                        val fbName = cm.getLinkProperties(fallback)?.interfaceName.orEmpty()
+                        val caps = cm.getNetworkCapabilities(fallback)
+                        val transport = caps?.let {
+                            AutoServerSelector.transportLabel(AutoServerSelector.transportKind(it))
+                        } ?: "unknown"
+                        service.dbg("[NET] event=lost iface=$lostName fallback=$fbName transport=$transport")
                         notifyInterfaceUpdate(cm, fallback, listener)
                         service.recoverAfterHandoff("network-lost")
                         cm.getNetworkCapabilities(fallback)?.let {
                             service.notifyAutoServerTransport(it)
                         }
                     } else {
+                        service.dbg("[NET] event=lost iface=$lostName fallback=none")
                         listener.updateDefaultInterface("", -1, false, false)
                     }
                 }
@@ -216,7 +232,7 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
         if (snapshot != lastIfaceLog) {
             lastIfaceLog = snapshot
             interfaces.forEach { boxIf ->
-                service.dbg("[NET] iface ${boxIf.name} idx=${boxIf.index} type=${boxIf.type} metered=${boxIf.metered}")
+                service.dbg("[NET] event=iface name=${boxIf.name} idx=${boxIf.index} type=${boxIf.type} metered=${boxIf.metered}")
             }
         }
         return object : NetworkInterfaceIterator {
@@ -248,17 +264,17 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
                     }
                     val ips = addresses.mapNotNull { it.hostAddress }.filter { it.isNotBlank() }
                     if (ips.isEmpty()) {
-                        service.dbg("[DNS] local $domain empty")
+                        service.dbg("[DNS] event=local-lookup domain=$domain result=empty")
                         ctx.errorCode(3)
                         return
                     }
                     lookupCount += 1
                     if (lookupCount <= 30 || lookupCount % 40 == 0) {
-                        service.dbg("[DNS] local $domain → ${ips.joinToString()}")
+                        service.dbg("[DNS] event=local-lookup domain=$domain ips=${ips.joinToString()}")
                     }
                     ctx.success(ips.joinToString("\n"))
                 } catch (error: Exception) {
-                    service.dbg("[DNS] local $domain error: ${error.message}")
+                    service.dbg("[DNS] event=local-lookup domain=$domain error=${error.message}")
                     ctx.errorCode(3)
                 }
             }

@@ -4,7 +4,6 @@ import android.net.Network
 import android.os.SystemClock
 import com.layer.app.diagnostics.DiagnosticLog
 import com.layer.core.config.AutoServerPolicy
-import com.layer.core.i18n.copy
 import com.layer.core.model.SavedServer
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -36,11 +35,11 @@ object VlessTcpProbe {
         }
         val median = AutoServerPolicy.median(samples)
         diagnostics?.append(
-            "$logPrefix probe $label " +
+            "$logPrefix event=probe server=$label " +
                 "bind=${if (network != null) "underlying" else "default"} " +
                 "ok=${samples.size}/${AutoServerPolicy.probeAttempts} " +
                 "samples=${if (samples.isEmpty()) "-" else samples.joinToString()} " +
-                "median=${median?.let { "$it ms" } ?: copy("no reply", "нет ответа")}",
+                "median=${median?.let { "$it" } ?: "miss"}",
         )
         median
     }
@@ -71,7 +70,8 @@ object VlessTcpProbe {
                     network.bindSocket(socket)
                 } catch (error: Exception) {
                     diagnostics?.append(
-                        "$logPrefix probe $label bind ${error.javaClass.simpleName}: ${error.message}",
+                        "$logPrefix event=probe-bind server=$label " +
+                            "error=${error.javaClass.simpleName}: ${error.message}",
                     )
                 }
             }
@@ -79,14 +79,15 @@ object VlessTcpProbe {
             val start = SystemClock.elapsedRealtime()
             socket.connect(InetSocketAddress(host, port), AutoServerPolicy.probeTimeoutMs)
             if (!socket.isConnected) {
-                diagnostics?.append("$logPrefix probe $label not connected")
+                diagnostics?.append("$logPrefix event=probe-miss server=$label why=not-connected")
                 null
             } else {
                 SystemClock.elapsedRealtime() - start
             }
         } catch (error: Exception) {
             diagnostics?.append(
-                "$logPrefix probe $label ${error.javaClass.simpleName}: ${error.message}",
+                "$logPrefix event=probe-miss server=$label " +
+                    "error=${error.javaClass.simpleName}: ${error.message}",
             )
             null
         } finally {

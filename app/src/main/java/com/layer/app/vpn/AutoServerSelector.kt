@@ -66,9 +66,9 @@ class AutoServerSelector(
                 .map { it.autoSelectServerEnabled to it.servers.size }
                 .distinctUntilChanged()
                 .collect { (enabled, count) ->
-                    log("настройки enabled=$enabled servers=$count")
+                    log("event=settings enabled=$enabled servers=$count")
                     if (enabled && !AutoServerPolicy.canEnable(count)) {
-                        disableAuto("мало серверов ($count)")
+                        disableAuto("too-few-servers count=$count")
                     }
                 }
         }
@@ -77,26 +77,32 @@ class AutoServerSelector(
     suspend fun prepareBestServer(): Boolean {
         val settings = repository.currentSnapshot().settings
         if (!settings.autoSelectServerEnabled) {
-            log("prepare пропуск: автовыбор выключен")
+            log("event=prepare action=skip reason=disabled")
             return false
         }
         if (!AutoServerPolicy.canEnable(settings.servers.size)) {
-            log("prepare пропуск: серверов ${settings.servers.size}, нужно ${AutoServerPolicy.minServers}")
+            log(
+                "event=prepare action=skip reason=too-few-servers " +
+                    "count=${settings.servers.size} need=${AutoServerPolicy.minServers}",
+            )
             return false
         }
         return mutex.withLock {
             _status.value = _status.value.copy(probing = true)
             try {
                 log(
-                    "prepare старт: ${settings.servers.size} серверов, " +
-                        "текущий=${nameOf(settings, settings.activeServerId)} " +
-                        "сеть=${transportLabel(currentTransportKind())}",
+                    "event=prepare action=start servers=${settings.servers.size} " +
+                        "current=${nameOf(settings, settings.activeServerId)} " +
+                        "transport=${transportLabel(currentTransportKind())}",
                 )
                 val best = probeAll(settings.servers)
-                log("prepare результаты: ${formatLatencies(settings, best.mapValues { it.value })}")
+                log("event=prepare action=results latencies=${formatLatencies(settings, best.mapValues { it.value })}")
                 val winner = best.minByOrNull { it.value }
                 if (winner == null) {
-                    log("prepare: ни один сервер не ответил, оставляем ${nameOf(settings, settings.activeServerId)}")
+                    log(
+                        "event=prepare action=keep reason=all-miss " +
+                            "current=${nameOf(settings, settings.activeServerId)}",
+                    )
                     _status.value = AutoServerUi(probing = false, latencyMs = null)
                     false
                 } else {
@@ -104,10 +110,16 @@ class AutoServerSelector(
                     _status.value = AutoServerUi(probing = false, latencyMs = winner.value)
                     connectionPing.publishFromAutoSelect(winner.value)
                     if (winner.key == settings.activeServerId) {
-                        log("prepare: лучший уже выбран ${nameOf(settings, winner.key)} · ${winner.value} ms")
+                        log(
+                            "event=prepare action=keep reason=already-best " +
+                                "server=${nameOf(settings, winner.key)} latencyMs=${winner.value}",
+                        )
                         false
                     } else {
-                        log("prepare: выбран ${nameOf(settings, winner.key)} · ${winner.value} ms")
+                        log(
+                            "event=prepare action=pick " +
+                                "server=${nameOf(settings, winner.key)} latencyMs=${winner.value}",
+                        )
                         repository.selectServer(winner.key)
                         true
                     }
@@ -130,29 +142,32 @@ class AutoServerSelector(
             val settings = repository.currentSnapshot().settings
             val minutes = AutoServerPolicy.clampInterval(settings.autoSelectIntervalMinutes)
             log(
-                "${if (restart) "мониторинг перезапуск" else "мониторинг старт"}: " +
-                    "каждые $minutes мин, сеть=${transportLabel(lastTransportKind)}, " +
-                    "текущий=${nameOf(settings, settings.activeServerId)}, " +
-                    "серверов=${settings.servers.size}",
+                "event=monitor action=${if (restart) "restart" else "start"} " +
+                    "intervalMin=$minutes transport=${transportLabel(lastTransportKind)} " +
+                    "current=${nameOf(settings, settings.activeServerId)} " +
+                    "servers=${settings.servers.size}",
             )
             while (true) {
                 val snap = repository.currentSnapshot().settings
                 if (!snap.autoSelectServerEnabled) {
-                    log("мониторинг стоп: автовыбор выключен")
+                    log("event=monitor action=stop reason=disabled")
                     return@launch
                 }
                 val waitMin = AutoServerPolicy.clampInterval(snap.autoSelectIntervalMinutes)
                 val interactive = isInteractive()
                 val waitMs = AutoServerPolicy.monitorDelayMs(waitMin, interactive)
                 if (!interactive) {
-                    log("ожидание ${waitMs / 60_000L} мин: устройство неактивно")
+                    log("event=monitor action=wait-idle delayMin=${waitMs / 60_000L}")
                 }
                 delay(waitMs)
                 if (AutoServerPolicy.shouldSkipPeriodicProbe(isInteractive())) {
-                    log("интервал пропуск: экран выключен или Doze")
+                    log("event=monitor action=skip reason=screen-off-or-doze")
                     continue
                 }
-                log("интервал ${waitMin} мин: проверка текущего ${nameOf(snap, snap.activeServerId)}")
+                log(
+                    "event=monitor action=interval intervalMin=$waitMin " +
+                        "current=${nameOf(snap, snap.activeServerId)}",
+                )
                 evaluateConnected(fullScan = false)
             }
         }
@@ -160,7 +175,7 @@ class AutoServerSelector(
 
     fun stopMonitoring() {
         if (monitorJob != null || networkJob != null || wakeJob != null) {
-            log("мониторинг стоп")
+            log("event=monitor action=stop")
         }
         monitorJob?.cancel()
         monitorJob = null
@@ -175,7 +190,7 @@ class AutoServerSelector(
     fun onNetworkTransportChanged(kind: Int) {
         if (kind == lastTransportKind || lastTransportKind == -1) {
             if (lastTransportKind == -1) {
-                log("сеть старт: ${transportLabel(kind)}")
+                log("event=transport action=start transport=${transportLabel(kind)}")
             }
             lastTransportKind = kind
             return
@@ -184,23 +199,26 @@ class AutoServerSelector(
         lastTransportKind = kind
         lastNetworkChangeElapsed = SystemClock.elapsedRealtime()
         memory.replaceAll { _, value -> value.copy(consecutiveFailures = 0) }
-        log("сеть ${transportLabel(from)} → ${transportLabel(kind)}, debounce ${AutoServerPolicy.networkChangeDebounceMs} ms")
+        log(
+            "event=transport from=${transportLabel(from)} to=${transportLabel(kind)} " +
+                "debounceMs=${AutoServerPolicy.networkChangeDebounceMs}",
+        )
         networkJob?.cancel()
         handoffRetryJob?.cancel()
         networkJob = scope.launch {
             delay(AutoServerPolicy.networkChangeDebounceMs)
             val connected = vpnController.status.value.state == VpnConnectionState.CONNECTED
             if (!connected) {
-                log("смена сети пропуск: VPN ${vpnController.status.value.state}")
+                log("event=handoff action=skip reason=vpn-state state=${vpnController.status.value.state}")
                 return@launch
             }
             vpnController.wakeAfterHandoff("wifi-cell")
             val snap = repository.currentSnapshot().settings
             if (!snap.autoSelectServerEnabled) {
-                log("смена сети: wake, автовыбор выключен")
+                log("event=handoff action=wake auto=false")
                 return@launch
             }
-            log("смена сети: проверка текущего")
+            log("event=handoff action=evaluate")
             evaluateConnected(fullScan = false)
         }
     }
@@ -224,30 +242,30 @@ class AutoServerSelector(
             }
             val suspect = currentIsSuspect(snap)
             if (ago < intervalMs && !suspect) {
-                log("экран включён, недавняя проверка ${ago / 1000} с назад")
+                log("event=screen-on action=skip reason=recent-probe agoSec=${ago / 1000}")
                 return@launch
             }
-            log("экран включён после простоя, проверка текущего")
+            log("event=screen-on action=evaluate agoSec=${if (ago == Long.MAX_VALUE) "never" else ago / 1000}")
             evaluateConnected(fullScan = false)
         }
     }
 
     fun notifyEnabledWhileConnected() {
         scope.launch {
-            log("включён при активном VPN, state=${vpnController.status.value.state}")
+            log("event=ui-enable-while-connected vpn=${vpnController.status.value.state}")
             val changed = prepareBestServer()
             val connected = vpnController.status.value.state == VpnConnectionState.CONNECTED ||
                 vpnController.status.value.state == VpnConnectionState.RECONNECTING
             if (connected) {
                 startMonitoring()
                 if (changed) {
-                    log("reload после выбора сервера")
+                    log("event=reload-after-pick changed=true")
                     vpnController.reload()
                 } else {
-                    log("reload не нужен, сервер не изменился")
+                    log("event=reload-after-pick changed=false")
                 }
             } else {
-                log("мониторинг не стартовал: VPN ${vpnController.status.value.state}")
+                log("event=monitor action=skip reason=vpn-state state=${vpnController.status.value.state}")
             }
         }
     }
@@ -255,30 +273,30 @@ class AutoServerSelector(
     private suspend fun evaluateConnected(fullScan: Boolean) {
         val settings = repository.currentSnapshot().settings
         if (!settings.autoSelectServerEnabled) {
-            log("оценка пропуск: автовыбор выключен")
+            log("event=evaluate action=skip reason=disabled")
             return
         }
         if (!AutoServerPolicy.canEnable(settings.servers.size)) {
-            log("оценка пропуск: серверов ${settings.servers.size}")
+            log("event=evaluate action=skip reason=too-few-servers count=${settings.servers.size}")
             return
         }
         val connected = vpnController.status.value.state == VpnConnectionState.CONNECTED
         if (!connected) {
-            log("оценка пропуск: VPN ${vpnController.status.value.state}")
+            log("event=evaluate action=skip reason=vpn-state state=${vpnController.status.value.state}")
             return
         }
         if (underlyingNetwork() == null) {
-            log("оценка пропуск: нет сети")
+            log("event=evaluate action=skip reason=no-network")
             return
         }
         lastEvaluateElapsed = SystemClock.elapsedRealtime()
         mutex.withLock {
             val currentId = settings.activeServerId ?: run {
-                log("оценка пропуск: нет activeServerId")
+                log("event=evaluate action=skip reason=no-active-id")
                 return@withLock
             }
             val current = settings.servers.find { it.id == currentId } ?: run {
-                log("оценка пропуск: текущий сервер не найден")
+                log("event=evaluate action=skip reason=server-missing")
                 return@withLock
             }
             val network = underlyingNetwork()
@@ -287,8 +305,8 @@ class AutoServerSelector(
                 lastNetworkChangeElapsed,
             )
             log(
-                "оценка current=${current.visibleName()} fullScan=$fullScan " +
-                    "ewma=${fmtMs(lastGoodCurrentMs)} cooldown=${cooldownLeftMs()} ms " +
+                "event=evaluate action=start current=${current.visibleName()} fullScan=$fullScan " +
+                    "ewma=${fmtMs(lastGoodCurrentMs)} cooldownMs=${cooldownLeftMs()} " +
                     "settling=$settling " +
                     "bind=${if (network != null) "underlying" else "default"}",
             )
@@ -298,12 +316,12 @@ class AutoServerSelector(
                 previousGood != null &&
                 AutoServerPolicy.isDegraded(currentMs, previousGood)
             if (currentMs == null) {
-                log("текущий не ответил ${current.visibleName()}, повторная проверка")
+                log("event=current action=retry reason=miss server=${current.visibleName()}")
                 currentMs = VlessTcpProbe.measureMedian(current, network, diagnostics)
             } else if (firstDegraded) {
                 log(
-                    "текущий ухудшился ${current.visibleName()} ${currentMs} ms " +
-                        "против ewma ${previousGood} ms, повторная проверка",
+                    "event=current action=retry reason=degraded " +
+                        "server=${current.visibleName()} latencyMs=$currentMs ewmaMs=$previousGood",
                 )
                 currentMs = VlessTcpProbe.measureMedian(current, network, diagnostics)
             }
@@ -319,11 +337,17 @@ class AutoServerSelector(
                 _status.value = _status.value.copy(latencyMs = currentMs)
                 connectionPing.publishFromAutoSelect(currentMs)
                 if (!fullScan && !degraded) {
-                    log("текущий стабилен ${current.visibleName()} · ${currentMs} ms, остальные не трогаем")
+                    log(
+                        "event=current action=stable server=${current.visibleName()} " +
+                            "latencyMs=$currentMs skipOthers=true",
+                    )
                     return@withLock
                 }
                 if (degraded) {
-                    log("текущий всё ещё хуже ${current.visibleName()} · ${currentMs} ms, сравниваем остальные")
+                    log(
+                        "event=current action=degraded server=${current.visibleName()} " +
+                            "latencyMs=$currentMs scanOthers=true",
+                    )
                 }
             } else {
                 _status.value = _status.value.copy(latencyMs = null)
@@ -331,64 +355,68 @@ class AutoServerSelector(
                 val failures = memory[currentId]?.consecutiveFailures ?: 1
                 if (settling || !AutoServerPolicy.shouldFailover(failures)) {
                     log(
-                        "текущий недоступен ${current.visibleName()} " +
-                            "($failures/${AutoServerPolicy.failuresBeforeFullScan})" +
-                            (if (settling) ", ждём после смены сети" else ", не переключаем"),
+                        "event=current action=miss server=${current.visibleName()} " +
+                            "failures=$failures/${AutoServerPolicy.failuresBeforeFullScan} " +
+                            "settling=$settling failover=false " +
+                            "hold=${if (settling) "wait-after-handoff" else "need-more-failures"}",
                     )
                     if (settling) scheduleHandoffRetry()
                     return@withLock
                 }
-                log("текущий недоступен ${current.visibleName()}, ищем другой")
+                log("event=current action=dead server=${current.visibleName()} scanOthers=true")
             }
             val others = settings.servers.filter { it.id != currentId }
             val all = VlessTcpProbe.measureAll(others, network, diagnostics)
             all.forEach { (id, ms) -> remember(id, ms) }
-            log("остальные: ${formatLatencies(settings, all)}")
+            log("event=others latencies=${formatLatencies(settings, all)}")
             val reachable = buildMap {
                 if (currentMs != null) put(currentId, currentMs)
                 all.forEach { (id, ms) -> if (ms != null) put(id, ms) }
             }
             if (currentMs == null && reachable.isNotEmpty()) {
                 val winner = reachable.minBy { it.value }
-                log("текущий мёртв, принудительно ${nameOf(settings, winner.key)} · ${winner.value} ms")
+                log(
+                    "event=switch action=force reason=current-dead " +
+                        "to=${nameOf(settings, winner.key)} latencyMs=${winner.value}",
+                )
                 switchTo(settings, winner.key, winner.value, force = true)
                 return@withLock
             }
             if (currentMs == null && reachable.isEmpty()) {
-                log("нет доступных серверов, оставляем ${current.visibleName()}")
+                log("event=switch action=skip reason=all-miss keep=${current.visibleName()}")
                 return@withLock
             }
             val candidate = reachable.filterKeys { it != currentId }.minByOrNull { it.value } ?: run {
-                log("нет других доступных серверов")
+                log("event=switch action=skip reason=no-other-reachable")
                 return@withLock
             }
             val baseline = currentMs ?: return@withLock
             if (!AutoServerPolicy.shouldSwitch(baseline, candidate.value)) {
                 val need = (baseline * (1.0 - AutoServerPolicy.switchImprovementRatio)).toLong()
                 log(
-                    "не переключаем: ${nameOf(settings, candidate.key)} ${candidate.value} ms " +
-                        "против текущих ${baseline} ms, нужно < $need ms (20%) " +
-                        "и быстрее на ${AutoServerPolicy.minSwitchDeltaMs} ms",
+                    "event=switch action=skip reason=not-enough-gain " +
+                        "candidate=${nameOf(settings, candidate.key)} candidateMs=${candidate.value} " +
+                        "currentMs=$baseline needMs=$need minDeltaMs=${AutoServerPolicy.minSwitchDeltaMs}",
                 )
                 return@withLock
             }
             if (!forceCooldownElapsed()) {
                 log(
-                    "не переключаем на ${nameOf(settings, candidate.key)} ${candidate.value} ms: " +
-                        "cooldown ещё ${cooldownLeftMs()} ms",
+                    "event=switch action=skip reason=cooldown " +
+                        "candidate=${nameOf(settings, candidate.key)} remainingMs=${cooldownLeftMs()}",
                 )
                 return@withLock
             }
             if (VpnStatusStore.hasRecentTraffic()) {
                 log(
-                    "кандидат лучше ${nameOf(settings, candidate.key)} ${candidate.value} ms, " +
-                        "но TUN недавно вёл трафик — не переключаем",
+                    "event=switch action=skip reason=recent-tun-traffic " +
+                        "candidate=${nameOf(settings, candidate.key)} candidateMs=${candidate.value}",
                 )
                 return@withLock
             }
             log(
-                "кандидат лучше: ${nameOf(settings, candidate.key)} ${candidate.value} ms " +
-                    "против ${current.visibleName()} ${baseline} ms, подтверждение",
+                "event=switch action=confirm candidate=${nameOf(settings, candidate.key)} " +
+                    "candidateMs=${candidate.value} current=${current.visibleName()} currentMs=$baseline",
             )
             val confirmed = confirmSoftSwitch(current, candidate.key, settings, network)
             if (confirmed == null) return@withLock
@@ -414,25 +442,26 @@ class AutoServerSelector(
         val candidateMs = VlessTcpProbe.measureMedian(candidate, network, diagnostics)
         remember(candidate.id, candidateMs)
         if (currentMs == null) {
-            log("подтверждение: текущий снова не ответил, оставляем до failover")
+            log("event=confirm action=abort reason=current-miss")
             return null
         }
         lastGoodCurrentMs = AutoServerPolicy.ewma(lastGoodCurrentMs, currentMs)
         _status.value = _status.value.copy(latencyMs = currentMs)
         connectionPing.publishFromAutoSelect(currentMs)
         if (candidateMs == null) {
-            log("подтверждение: кандидат ${candidate.visibleName()} не ответил")
+            log("event=confirm action=abort reason=candidate-miss server=${candidate.visibleName()}")
             return null
         }
         if (!AutoServerPolicy.shouldSwitch(currentMs, candidateMs)) {
             log(
-                "подтверждение: разрыв исчез ${current.visibleName()} ${currentMs} ms " +
-                    "против ${candidate.visibleName()} ${candidateMs} ms",
+                "event=confirm action=abort reason=gap-gone " +
+                    "current=${current.visibleName()} currentMs=$currentMs " +
+                    "candidate=${candidate.visibleName()} candidateMs=$candidateMs",
             )
             return null
         }
         if (VpnStatusStore.hasRecentTraffic()) {
-            log("подтверждение: TUN снова вёл трафик — не переключаем")
+            log("event=confirm action=abort reason=recent-tun-traffic")
             return null
         }
         return candidate.id to candidateMs
@@ -450,7 +479,10 @@ class AutoServerSelector(
         force: Boolean,
     ) {
         if (!force && !forceCooldownElapsed()) {
-            log("switchTo пропуск cooldown ${cooldownLeftMs()} ms → ${nameOf(settings, id)}")
+            log(
+                "event=switch action=skip reason=cooldown remainingMs=${cooldownLeftMs()} " +
+                    "to=${nameOf(settings, id)}",
+            )
             return
         }
         val from = nameOf(settings, settings.activeServerId)
@@ -459,7 +491,8 @@ class AutoServerSelector(
         _status.value = _status.value.copy(latencyMs = latencyMs)
         connectionPing.publishFromAutoSelect(latencyMs)
         log(
-            "переключение ${if (force) "force" else "soft"} $from → ${nameOf(settings, id)} · $latencyMs ms",
+            "event=switch action=${if (force) "force" else "soft"} from=$from " +
+                "to=${nameOf(settings, id)} latencyMs=$latencyMs",
         )
         repository.selectServer(id)
         vpnController.reload()
@@ -497,11 +530,11 @@ class AutoServerSelector(
             SystemClock.elapsedRealtime(),
             lastNetworkChangeElapsed,
         ).coerceAtLeast(3_000L)
-        log("повтор через ${wait} ms после смены сети")
+        log("event=handoff-retry action=schedule waitMs=$wait")
         handoffRetryJob = scope.launch {
             delay(wait)
             if (vpnController.status.value.state != VpnConnectionState.CONNECTED) return@launch
-            log("повтор после смены сети")
+            log("event=handoff-retry action=run")
             vpnController.wakeAfterHandoff("wifi-cell-retry")
             delay(400)
             evaluateConnected(fullScan = false)
@@ -511,7 +544,7 @@ class AutoServerSelector(
     private suspend fun disableAuto(reason: String) {
         val current = repository.currentSnapshot().settings
         if (!current.autoSelectServerEnabled) return
-        log("выключен: $reason")
+        log("event=disable reason=$reason")
         repository.saveSettings(current.copy(autoSelectServerEnabled = false))
         stopMonitoring()
         _status.value = AutoServerUi()
@@ -563,6 +596,6 @@ class AutoServerSelector(
             else -> "unknown"
         }
 
-        fun fmtMs(ms: Long?): String = ms?.let { "$it ms" } ?: "нет ответа"
+        fun fmtMs(ms: Long?): String = ms?.let { "$it" } ?: "miss"
     }
 }

@@ -25,7 +25,7 @@ object DiagnosticReport {
     private const val LOGS_FOLDER = "Layer logs"
 
     suspend fun build(context: Context, container: AppContainer): String {
-        val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale("ru")).format(Date())
+        val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
         val status = container.vpnController.status.value
         val snapshot = runCatching { container.repository.currentSnapshot() }.getOrNull()
         val lastConfig = container.diagnostics.lastStartedConfig
@@ -89,6 +89,8 @@ object DiagnosticReport {
             }
             appendLine()
             appendLine("=== Logs ===")
+            appendLine("Format: [TAG] event=... key=value")
+            appendLine("Tags: VPN AUTO ADS RULE DNS NET BOX CFG PING STAT TUN")
             val logs = container.diagnostics.exportText()
             appendLine(logs.ifBlank { "(empty)" })
             if (container.diagnostics.lastTunDump.isNotBlank()) {

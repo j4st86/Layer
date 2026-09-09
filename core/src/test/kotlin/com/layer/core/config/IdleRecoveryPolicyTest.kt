@@ -192,4 +192,49 @@ class IdleRecoveryPolicyTest {
             ),
         )
     }
+
+    @Test
+    fun skipReasonMatchesDecide() {
+        assertEquals(
+            "vpn-not-started",
+            IdleRecoveryPolicy.skipReason(
+                nowElapsed = 3_000L,
+                startedElapsed = 0L,
+                lastRecoverElapsed = 0L,
+            ),
+        )
+        assertEquals(
+            "no-network",
+            IdleRecoveryPolicy.skipReason(
+                nowElapsed = 60_000L,
+                startedElapsed = 1_000L,
+                lastRecoverElapsed = 0L,
+                hasNetwork = false,
+            ),
+        )
+        assertEquals(
+            "debounce",
+            IdleRecoveryPolicy.skipReason(
+                nowElapsed = 40_000L,
+                startedElapsed = 1_000L,
+                lastRecoverElapsed = 25_000L,
+            ),
+        )
+        assertEquals(
+            null,
+            IdleRecoveryPolicy.skipReason(
+                nowElapsed = 110_000L,
+                startedElapsed = 1_000L,
+                lastRecoverElapsed = 10_000L,
+            ),
+        )
+        assertEquals(
+            "debounce",
+            IdleRecoveryPolicy.handoffSkipReason(
+                nowElapsed = 40_000L,
+                startedElapsed = 1_000L,
+                lastHandoffWakeElapsed = 30_000L,
+            ),
+        )
+    }
 }

@@ -102,16 +102,14 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             val settings = snapshot.value.settings
             if (enabled && !AutoServerPolicy.canEnable(settings.servers.size)) {
                 container.diagnostics.append(
-                    "[AUTO] UI " + copy(
-                        "cannot enable: servers ${settings.servers.size}",
-                        "включить нельзя: серверов ${settings.servers.size}",
-                    ),
+                    "[AUTO] event=ui-toggle action=skip reason=too-few-servers " +
+                        "count=${settings.servers.size}",
                 )
                 return@launch
             }
             container.diagnostics.append(
-                "[AUTO] UI ${copy(if (enabled) "on" else "off", if (enabled) "включён" else "выключен")}, " +
-                    "servers=${settings.servers.size}, VPN=${container.vpnController.status.value.state}",
+                "[AUTO] event=ui-toggle enabled=$enabled servers=${settings.servers.size} " +
+                    "vpn=${container.vpnController.status.value.state}",
             )
             container.repository.saveSettings(settings.copy(autoSelectServerEnabled = enabled))
             if (enabled) {
@@ -130,10 +128,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
                 autoSelectIntervalMinutes = AutoServerPolicy.clampInterval(minutes),
             )
             container.diagnostics.append(
-                "[AUTO] UI " + copy(
-                    "interval ${updated.autoSelectIntervalMinutes} min",
-                    "интервал ${updated.autoSelectIntervalMinutes} мин",
-                ),
+                "[AUTO] event=ui-interval minutes=${updated.autoSelectIntervalMinutes}",
             )
             container.repository.saveSettings(updated)
             val connected = container.vpnController.status.value.state == VpnConnectionState.CONNECTED
@@ -146,9 +141,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     fun setAdBlock(enabled: Boolean) {
         viewModelScope.launch {
             val settings = snapshot.value.settings
-            container.diagnostics.append(
-                "[ADS] UI ${copy(if (enabled) "on" else "off", if (enabled) "включена" else "выключена")}",
-            )
+            container.diagnostics.append("[ADS] event=ui-toggle enabled=$enabled")
             container.repository.saveSettings(settings.copy(adBlockEnabled = enabled))
             if (enabled) {
                 val fetched = container.adBlockDownloader.ensureCopy(network = null)
