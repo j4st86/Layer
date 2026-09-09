@@ -436,6 +436,12 @@ object SingBoxConfigGenerator {
                     put("outbound", "direct")
                 })
             }
+            add(buildJsonObject {
+                putJsonArray("package_name") {
+                    PushDirectPackages.packages.forEach { add(it) }
+                }
+                put("outbound", "direct")
+            })
             // 1. App DIRECT
             if (directApps.isNotEmpty()) {
                 add(buildJsonObject {

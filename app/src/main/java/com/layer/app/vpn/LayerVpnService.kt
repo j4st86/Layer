@@ -35,9 +35,12 @@ import io.nekohasekai.libbox.SystemProxyStatus
 import io.nekohasekai.libbox.TunOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
@@ -61,6 +64,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
     private var lastIdleRecoverElapsed = 0L
     private var lastHandoffWakeElapsed = 0L
     private var lastScreenOffElapsed = 0L
+    private var idlePokeJob: Job? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action != ACTION_STOP) {
@@ -373,6 +377,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         platform = null
         startedElapsed = 0L
         lastIdleRecoverElapsed = 0L
+        lastHandoffWakeElapsed = 0L
         lastScreenOffElapsed = 0L
         notification.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -472,6 +477,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         platform = null
         startedElapsed = 0L
         lastIdleRecoverElapsed = 0L
+        lastHandoffWakeElapsed = 0L
         lastScreenOffElapsed = 0L
         notification.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -538,10 +544,12 @@ class LayerVpnService : VpnService(), CommandServerHandler {
                 when (intent?.action) {
                     Intent.ACTION_SCREEN_OFF -> {
                         lastScreenOffElapsed = SystemClock.elapsedRealtime()
+                        startIdlePoke()
                     }
                     Intent.ACTION_SCREEN_ON,
                     Intent.ACTION_USER_PRESENT,
                     -> {
+                        stopIdlePoke()
                         recoverAfterIdle(intent.action ?: "screen", longIdleReload = true)
                         container.autoServerSelector.onDeviceBecameInteractive()
                     }
@@ -570,9 +578,29 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             filter,
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
+        val interactive = getSystemService(PowerManager::class.java)?.isInteractive != false
+        if (!interactive) startIdlePoke()
+    }
+
+    private fun startIdlePoke() {
+        if (stopping || commandServer == null) return
+        if (idlePokeJob?.isActive == true) return
+        idlePokeJob = scope.launch {
+            while (isActive) {
+                delay(IdleRecoveryPolicy.idlePokeMs)
+                if (stopping || commandServer == null) return@launch
+                recoverAfterIdle("idle-poke")
+            }
+        }
+    }
+
+    private fun stopIdlePoke() {
+        idlePokeJob?.cancel()
+        idlePokeJob = null
     }
 
     private fun unregisterIdleRecovery() {
+        stopIdlePoke()
         val receiver = screenReceiver ?: return
         screenReceiver = null
         runCatching { unregisterReceiver(receiver) }

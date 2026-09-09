@@ -1,6 +1,7 @@
 package com.layer.core.config
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class IdleRecoveryPolicyTest {
@@ -171,6 +172,12 @@ class IdleRecoveryPolicyTest {
                 lastHandoffWakeElapsed = 30_000L,
             ),
         )
+    }
+
+    @Test
+    fun idlePokeIsLongerThanDebounceAndShorterThanDozeWindow() {
+        assertTrue(IdleRecoveryPolicy.idlePokeMs > IdleRecoveryPolicy.debounceMs)
+        assertTrue(IdleRecoveryPolicy.idlePokeMs < 15 * 60 * 1000L)
     }
 
     @Test

@@ -145,6 +145,33 @@ class SingBoxConfigGeneratorTest {
     }
 
     @Test
+    fun playServicesAlwaysDirectSoPushBypassesVless() {
+        val json = SingBoxConfigGenerator.generate(
+            uuid = sampleUuid,
+            settings = sampleSettings.copy(automaticRuleSetEnabled = true),
+            appRules = listOf(
+                AppRoutingRule("com.google.android.gms", "Play Services", AppRoutingMode.VPN),
+            ),
+            domainRules = emptyList(),
+            ownPackageName = "com.layer.app",
+        ).json
+        val rules = Json.parseToJsonElement(json).jsonObject["route"]!!.jsonObject["rules"]!!.jsonArray
+        val serialized = rules.map { it.toString() }
+        val pushDirect = serialized.indexOfFirst {
+            it.contains("com.google.android.gms") &&
+                it.contains("com.google.android.gsf") &&
+                it.contains("\"direct\"")
+        }
+        val userVpnGms = serialized.indexOfFirst {
+            it.contains("com.google.android.gms") && it.contains("\"proxy\"")
+        }
+        val playList = serialized.indexOfFirst { it.contains("rs-google-play") }
+        assertTrue(pushDirect >= 0)
+        assertTrue(userVpnGms > pushDirect)
+        assertTrue(playList > pushDirect)
+    }
+
+    @Test
     fun serverIsForcedDirectToPreventRoutingLoop() {
         val json = SingBoxConfigGenerator.generate(
             uuid = sampleUuid,
