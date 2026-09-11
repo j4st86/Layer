@@ -6,6 +6,7 @@ import android.net.VpnService
 import android.os.SystemClock
 import com.layer.app.R
 import com.layer.core.config.AutoServerPolicy
+import com.layer.core.config.IdleRecoveryPolicy
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,8 +33,11 @@ object VpnStatusStore {
     }
 
     fun hasRecentTraffic(windowMs: Long = AutoServerPolicy.trafficQuietMs): Boolean {
-        if (lastTrafficElapsed <= 0L) return false
-        return SystemClock.elapsedRealtime() - lastTrafficElapsed <= windowMs
+        return trafficAgeMs() <= windowMs
+    }
+
+    fun trafficAgeMs(nowElapsed: Long = SystemClock.elapsedRealtime()): Long {
+        return IdleRecoveryPolicy.trafficAgeMs(nowElapsed, lastTrafficElapsed)
     }
 }
 

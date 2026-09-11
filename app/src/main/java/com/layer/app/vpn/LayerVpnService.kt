@@ -65,6 +65,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
     private var lastHandoffWakeElapsed = 0L
     private var lastScreenOffElapsed = 0L
     private var idlePokeJob: Job? = null
+    private var logClientStatusIntervalNs = 0L
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action != ACTION_STOP) {
@@ -342,13 +343,24 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         return server
     }
 
-    private fun attachLogClient() {
+    private fun desiredStatusIntervalNs(): Long {
+        val interactive = getSystemService(PowerManager::class.java)?.isInteractive != false
+        return if (interactive) {
+            IdleRecoveryPolicy.statusIntervalInteractiveNs
+        } else {
+            IdleRecoveryPolicy.statusIntervalIdleNs
+        }
+    }
+
+    private fun attachLogClient(force: Boolean = true) {
+        val interval = desiredStatusIntervalNs()
+        if (!force && logClient != null && logClientStatusIntervalNs == interval) return
         runCatching { logClient?.disconnect() }
         logClient = null
         val options = CommandClientOptions().apply {
             addCommand(Libbox.CommandLog)
             addCommand(Libbox.CommandStatus)
-            statusInterval = 1_000_000_000L
+            statusInterval = interval
         }
         val client = CommandClient(SingBoxLogBridge(container.diagnostics), options)
         val connected = runCatching { client.connect() }
@@ -356,11 +368,21 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             dbg("[BOX] event=log-client action=fail error=${connected.exceptionOrNull()?.message}")
             runCatching { client.connect() }
                 .onFailure { dbg("[BOX] event=log-client action=retry-fail error=${it.message}") }
-                .onSuccess { dbg("[BOX] event=log-client action=retry-ok") }
+                .onSuccess { dbg("[BOX] event=log-client action=retry-ok intervalNs=$interval") }
         } else {
-            dbg("[BOX] event=log-client action=ok")
+            dbg("[BOX] event=log-client action=ok intervalNs=$interval")
         }
         logClient = client
+        logClientStatusIntervalNs = interval
+    }
+
+    private fun retuneLogClient() {
+        scope.launch {
+            lifecycleMutex.withLock {
+                if (stopping || commandServer == null) return@withLock
+                attachLogClient(force = false)
+            }
+        }
     }
 
     private fun stopVpn() {
@@ -377,6 +399,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         runCatching { commandServer?.close() }
         runCatching { vpnFd?.close() }
         logClient = null
+        logClientStatusIntervalNs = 0L
         commandServer = null
         vpnFd = null
         platform = null
@@ -491,6 +514,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         runCatching { commandServer?.close() }
         runCatching { vpnFd?.close() }
         logClient = null
+        logClientStatusIntervalNs = 0L
         commandServer = null
         vpnFd = null
         platform = null
@@ -597,6 +621,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
                         lastScreenOffElapsed = SystemClock.elapsedRealtime()
                         dbg("[VPN] event=screen action=off")
                         startIdlePoke()
+                        retuneLogClient()
                     }
                     Intent.ACTION_SCREEN_ON,
                     Intent.ACTION_USER_PRESENT,
@@ -606,6 +631,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
                                 if (intent.action == Intent.ACTION_USER_PRESENT) "user-present" else "on",
                         )
                         stopIdlePoke()
+                        retuneLogClient()
                         recoverAfterIdle(
                             if (intent.action == Intent.ACTION_USER_PRESENT) "user-present" else "screen-on",
                             longIdleReload = true,
@@ -619,8 +645,12 @@ class LayerVpnService : VpnService(), CommandServerHandler {
                             if (lastScreenOffElapsed == 0L) {
                                 lastScreenOffElapsed = SystemClock.elapsedRealtime()
                             }
+                            stopIdlePoke()
                         } else {
                             recoverAfterIdle("idle-mode-off", longIdleReload = true)
+                            val interactive = getSystemService(PowerManager::class.java)
+                                ?.isInteractive != false
+                            if (!interactive) startIdlePoke()
                         }
                     }
                 }
@@ -644,12 +674,16 @@ class LayerVpnService : VpnService(), CommandServerHandler {
 
     private fun startIdlePoke() {
         if (stopping || commandServer == null) return
+        if (getSystemService(PowerManager::class.java)?.isDeviceIdleMode == true) return
         if (idlePokeJob?.isActive == true) return
         dbg("[VPN] event=idle-poke action=start intervalMs=${IdleRecoveryPolicy.idlePokeMs}")
         idlePokeJob = scope.launch {
             while (isActive) {
                 delay(IdleRecoveryPolicy.idlePokeMs)
                 if (stopping || commandServer == null) return@launch
+                val doze = getSystemService(PowerManager::class.java)?.isDeviceIdleMode == true
+                val age = VpnStatusStore.trafficAgeMs()
+                if (IdleRecoveryPolicy.idlePokeSkipReason(doze, age) != null) continue
                 recoverAfterIdle("idle-poke")
             }
         }

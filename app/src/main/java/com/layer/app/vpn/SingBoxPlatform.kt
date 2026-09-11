@@ -33,7 +33,6 @@ import io.nekohasekai.libbox.NetworkInterface as LibboxNetworkInterface
 class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface {
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var protectCount = 0
-    private var lookupCount = 0
 
     @Volatile
     var underlyingNetwork: Network? = null
@@ -50,7 +49,7 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
     override fun autoDetectInterfaceControl(fd: Int) {
         service.protect(fd)
         protectCount += 1
-        if (protectCount <= 25 || protectCount % 50 == 0) {
+        if (protectCount <= 3) {
             service.dbg("[NET] event=protect fd=$fd count=$protectCount")
         }
     }
@@ -267,10 +266,6 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
                         service.dbg("[DNS] event=local-lookup domain=$domain result=empty")
                         ctx.errorCode(3)
                         return
-                    }
-                    lookupCount += 1
-                    if (lookupCount <= 30 || lookupCount % 40 == 0) {
-                        service.dbg("[DNS] event=local-lookup domain=$domain ips=${ips.joinToString()}")
                     }
                     ctx.success(ips.joinToString("\n"))
                 } catch (error: Exception) {

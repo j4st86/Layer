@@ -178,6 +178,84 @@ class IdleRecoveryPolicyTest {
     fun idlePokeIsLongerThanDebounceAndShorterThanDozeWindow() {
         assertTrue(IdleRecoveryPolicy.idlePokeMs > IdleRecoveryPolicy.debounceMs)
         assertTrue(IdleRecoveryPolicy.idlePokeMs < 15 * 60 * 1000L)
+        assertTrue(
+            IdleRecoveryPolicy.idlePokeTrafficMs >
+                IdleRecoveryPolicy.statusIntervalIdleNs / 1_000_000L,
+        )
+        assertTrue(
+            IdleRecoveryPolicy.idlePokeLiveMs >
+                2 * IdleRecoveryPolicy.statusIntervalIdleNs / 1_000_000L,
+        )
+        assertTrue(IdleRecoveryPolicy.idlePokeLiveMs < IdleRecoveryPolicy.idlePokeTrafficMs)
+        assertTrue(
+            IdleRecoveryPolicy.idlePokeTrafficMs - IdleRecoveryPolicy.idlePokeLiveMs >=
+                IdleRecoveryPolicy.idlePokeMs,
+        )
+        assertTrue(
+            IdleRecoveryPolicy.statusIntervalInteractiveNs / 1_000_000L <
+                AutoServerPolicy.trafficQuietMs,
+        )
+    }
+
+    @Test
+    fun idlePokeSkipsDozeLiveStreamAndQuietTun() {
+        assertEquals(
+            "doze",
+            IdleRecoveryPolicy.idlePokeSkipReason(true, IdleRecoveryPolicy.idlePokeLiveMs + 1L),
+        )
+        assertEquals(
+            "no-traffic",
+            IdleRecoveryPolicy.idlePokeSkipReason(false, Long.MAX_VALUE),
+        )
+        assertEquals(
+            "no-traffic",
+            IdleRecoveryPolicy.idlePokeSkipReason(false, IdleRecoveryPolicy.idlePokeTrafficMs + 1L),
+        )
+        assertEquals(
+            "live-traffic",
+            IdleRecoveryPolicy.idlePokeSkipReason(false, 20_000L),
+        )
+        assertEquals(
+            "live-traffic",
+            IdleRecoveryPolicy.idlePokeSkipReason(false, IdleRecoveryPolicy.idlePokeLiveMs),
+        )
+        assertEquals(
+            null,
+            IdleRecoveryPolicy.idlePokeSkipReason(false, IdleRecoveryPolicy.idlePokeLiveMs + 1L),
+        )
+    }
+
+    @Test
+    fun idlePokeTickerCannotSkipTheStallWindow() {
+        val liveAge = IdleRecoveryPolicy.idlePokeLiveMs
+        assertEquals(
+            "live-traffic",
+            IdleRecoveryPolicy.idlePokeSkipReason(false, liveAge),
+        )
+        val nextTickAge = liveAge + IdleRecoveryPolicy.idlePokeMs
+        assertEquals(
+            null,
+            IdleRecoveryPolicy.idlePokeSkipReason(false, nextTickAge),
+        )
+        assertTrue(nextTickAge <= IdleRecoveryPolicy.idlePokeTrafficMs)
+        val midPhaseAge = 80_000L
+        assertEquals(
+            "live-traffic",
+            IdleRecoveryPolicy.idlePokeSkipReason(false, midPhaseAge),
+        )
+        assertEquals(
+            null,
+            IdleRecoveryPolicy.idlePokeSkipReason(
+                false,
+                midPhaseAge + IdleRecoveryPolicy.idlePokeMs,
+            ),
+        )
+    }
+
+    @Test
+    fun trafficAgeTreatsMissingSamplesAsQuiet() {
+        assertEquals(Long.MAX_VALUE, IdleRecoveryPolicy.trafficAgeMs(90_000L, 0L))
+        assertEquals(40_000L, IdleRecoveryPolicy.trafficAgeMs(90_000L, 50_000L))
     }
 
     @Test

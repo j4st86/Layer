@@ -1,32 +1,15 @@
 package com.layer.core.diagnostics
 
 /**
- * sing-box debug/trace logs every TUN packet. Telegram's reconnect storm then
- * wipes the diagnostic buffer, so overnight [VPN]/[AUTO] history is gone.
+ * sing-box info logs every outbound during music. That wipes the diagnostic
+ * buffer, so overnight [VPN]/[AUTO] history is gone. Keep warn+error only.
  */
 object BoxLogFilter {
-    private val noisyInfo = listOf(
-        "inbound/tun[",
-        "inbound packet connection",
-        "inbound connection from",
-        "inbound connection to",
-        "found package name:",
-        "found reserve mapped domain:",
-        "outbound packet connection",
-        "connection upload",
-        "connection download",
-        "XtlsPadding",
-        "Xtls Unpadding",
-        "XtlsFilterTls",
-    )
-
-    fun keep(level: String, text: String): Boolean {
-        val lv = level.lowercase()
-        if (lv == "trace" || lv == "debug") return false
-        if (lv == "info" && noisyInfo.any { text.contains(it, ignoreCase = true) }) {
-            return false
+    fun keep(level: String, @Suppress("UNUSED_PARAMETER") text: String): Boolean {
+        return when (level.lowercase()) {
+            "panic", "fatal", "error", "warn", "warning" -> true
+            else -> false
         }
-        return true
     }
 
     fun fingerprint(level: String, text: String): String {

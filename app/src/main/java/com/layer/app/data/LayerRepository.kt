@@ -355,7 +355,7 @@ class LayerRepository(
             localRuleSets = localRuleSets,
             remoteRuleSetFallback = remoteRuleSetFallback,
             adBlockRuleSetPath = adBlockRuleSetPath,
-            logLevel = "info",
+            logLevel = "warn",
         )
     }
 

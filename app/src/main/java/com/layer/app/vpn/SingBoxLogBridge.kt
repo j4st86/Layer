@@ -3,6 +3,7 @@ package com.layer.app.vpn
 import com.layer.app.diagnostics.DiagnosticLog
 import com.layer.core.diagnostics.BoxLogFilter
 import com.layer.core.diagnostics.BoxLogRateLimiter
+import com.layer.core.diagnostics.StatusLogPolicy
 import io.nekohasekai.libbox.CommandClientHandler
 import io.nekohasekai.libbox.ConnectionEvents
 import io.nekohasekai.libbox.LogIterator
@@ -68,7 +69,9 @@ class SingBoxLogBridge(private val diagnostics: DiagnosticLog) : CommandClientHa
             VpnStatusStore.noteTraffic()
         }
         val now = System.currentTimeMillis()
-        if (now - lastStatMs < 8_000L) return
+        if (!StatusLogPolicy.shouldLog(now, lastStatMs, message.uplink, message.downlink)) {
+            return
+        }
         lastStatMs = now
         diagnostics.append(
             "[STAT] conn in=${message.connectionsIn} out=${message.connectionsOut} " +

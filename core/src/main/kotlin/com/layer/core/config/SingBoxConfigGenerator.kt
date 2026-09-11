@@ -53,7 +53,7 @@ object SingBoxConfigGenerator {
         localRuleSets: Map<String, String> = emptyMap(),
         remoteRuleSetFallback: Boolean = true,
         adBlockRuleSetPath: String? = null,
-        logLevel: String = "info",
+        logLevel: String = "warn",
     ): ConfigGenerationResult {
         val trimmedUuid = VlessLinkParser.extractUuid(uuid)
         if (trimmedUuid.isNullOrBlank()) {
@@ -279,10 +279,12 @@ object SingBoxConfigGenerator {
         }
         put("packet_encoding", "xudp")
         put("domain_resolver", "dns-local")
-        // After Doze/screen-off, carrier NAT drops idle TCP. Default keep-alive
-        // idle is 5m, so the VLESS socket looks alive until the next dial times out.
-        put("tcp_keep_alive", "15s")
-        put("tcp_keep_alive_interval", "15s")
+        // After Doze/screen-off, carrier NAT can drop idle TCP. 15s keep-alives
+        // keep LTE from sleeping in a quiet pocket; 60s still probes before
+        // many NATs expire. Music already keeps the socket; FCM is GMS DIRECT;
+        // SCREEN_ON / handoff still Wake.
+        put("tcp_keep_alive", "60s")
+        put("tcp_keep_alive_interval", "60s")
         put("connect_timeout", "15s")
         putJsonObject("tls") {
             put("enabled", true)

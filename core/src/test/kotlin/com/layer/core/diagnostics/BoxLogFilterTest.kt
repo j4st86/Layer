@@ -17,6 +17,12 @@ class BoxLogFilterTest {
             ),
         )
         assertFalse(BoxLogFilter.keep("info", "router: found package name: org.telegram.messenger"))
+        assertFalse(
+            BoxLogFilter.keep(
+                "info",
+                "outbound/vless[proxy]: outbound connection to 149.154.167.50:443",
+            ),
+        )
     }
 
     @Test
@@ -30,8 +36,8 @@ class BoxLogFilterTest {
         )
         assertTrue(
             BoxLogFilter.keep(
-                "info",
-                "outbound/vless[proxy]: outbound connection to 149.154.167.50:443",
+                "warn",
+                "outbound/vless[proxy]: connection aborted",
             ),
         )
     }
