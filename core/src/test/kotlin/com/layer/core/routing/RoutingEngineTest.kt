@@ -40,6 +40,28 @@ class RoutingEngineTest {
     }
 
     @Test
+    fun unlistedBrowserUsesAutomaticListsThenDirect() {
+        val listed = listOf(bankApp, vpnApp)
+        val vpnListed = RoutingEngine.decide(
+            packageName = "org.mozilla.firefox",
+            domain = "youtube.com",
+            appRules = listed,
+            automaticVpnMatch = true,
+        )
+        assertEquals(RoutingOutbound.VPN, vpnListed.outbound)
+        assertEquals(RoutingReason.AUTOMATIC_RULE_SET, vpnListed.reason)
+
+        val normal = RoutingEngine.decide(
+            packageName = "org.mozilla.firefox",
+            domain = "wildberries.ru",
+            appRules = listed,
+            automaticVpnMatch = false,
+        )
+        assertEquals(RoutingOutbound.DIRECT, normal.outbound)
+        assertEquals(RoutingReason.DEFAULT_DIRECT, normal.reason)
+    }
+
+    @Test
     fun manualDomainVpnGoesVpn() {
         val decision = RoutingEngine.decide(
             domain = "youtube.com",

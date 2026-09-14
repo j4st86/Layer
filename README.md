@@ -17,7 +17,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-4C6EF5?style=flat-square" alt="GPL-3.0"></a>
   <a href="https://github.com/j4st86/Layer/releases"><img src="https://img.shields.io/github/v/release/j4st86/Layer?style=flat-square&color=2F9E44" alt="Release"></a>
-  <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white" alt="Android 8.0+">
+  <img src="https://img.shields.io/badge/Android-14%2B-3DDC84?style=flat-square&logo=android&logoColor=white" alt="Android 14+">
   <img src="https://img.shields.io/badge/arch-arm64-868E96?style=flat-square" alt="arm64">
 </p>
 
@@ -75,7 +75,7 @@ Split-туннель есть у многих клиентов. Layer заточ
 ./gradlew :core:test :app:assembleRelease
 ```
 
-Нужны JDK 17, Android SDK 36, Go 1.25+ и NDK 28. Скрипт собирает slim sing-box **v1.14.0** (TUN, VLESS, Reality/uTLS, gVisor), без QUIC, WireGuard, Tailscale и Naive.
+Нужны JDK 17, Android SDK 37 (compile) / 36 (target), Go 1.25+ и NDK 28. Скрипт собирает slim sing-box **v1.14.0** (TUN, VLESS, Reality/uTLS, gVisor), без QUIC, WireGuard, Tailscale и Naive.
 
 Подпись release читается из локального `keystore.properties` (см. `keystore.properties.example`). Файл ключа в репозиторий не кладётся.
 

@@ -8,6 +8,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.layer.app.locale.AppLanguagePreferences
 import com.layer.app.ui.LayerRoot
 import com.layer.app.ui.theme.LayerTheme
+import com.layer.app.vpn.LayerVpnService
 
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -20,5 +21,10 @@ class MainActivity : AppCompatActivity() {
                 LayerRoot(container = (application as LayerApp).container)
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        LayerVpnService.recheckLockdown()
     }
 }

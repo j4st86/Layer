@@ -9,7 +9,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEST="$ROOT/app/libs/libbox.aar"
 VERSION="${SINGBOX_VERSION:-v1.14.0}"
 SRC="${SINGBOX_SRC:-$ROOT/.cache/sing-box}"
-ANDROID_API="${ANDROID_API:-24}"
+ANDROID_API="${ANDROID_API:-34}"
 BIND_TARGET="${BIND_TARGET:-android/arm64}"
 
 export JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home}"

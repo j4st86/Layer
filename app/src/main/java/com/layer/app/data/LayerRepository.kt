@@ -4,10 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
-import android.os.Build
 import com.layer.app.R
 import com.layer.core.config.ConnectionIdentity
 import com.layer.core.config.DuplicateConnectionException
+import com.layer.core.config.FixedAppRoutingPolicy
 import com.layer.core.config.ParsedVlessLink
 import com.layer.core.config.RecommendedApps
 import com.layer.core.config.SingBoxConfigGenerator
@@ -28,6 +28,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -55,7 +56,9 @@ class LayerRepository(
     private val mutex = Mutex()
 
     val settings: Flow<LayerSettings> = dataStore.settings
-    val appRules: Flow<List<AppRoutingRule>> = dataStore.appRules
+    val appRules: Flow<List<AppRoutingRule>> = dataStore.appRules.map { rules ->
+        rules.filter { FixedAppRoutingPolicy.isUserConfigurable(it.packageName) }
+    }
     val domainRules: Flow<List<DomainRoutingRule>> = dataStore.domainRules
 
     val snapshot: Flow<LayerSnapshot> = combine(settings, appRules, domainRules) { s, apps, domains ->
@@ -253,6 +256,12 @@ class LayerRepository(
 
     suspend fun upsertAppRule(rule: AppRoutingRule) {
         val current = dataStore.appRules.first().toMutableList()
+        if (!FixedAppRoutingPolicy.isUserConfigurable(rule.packageName)) {
+            dataStore.saveAppRules(
+                current.filter { FixedAppRoutingPolicy.isUserConfigurable(it.packageName) },
+            )
+            return
+        }
         val index = current.indexOfFirst { it.packageName == rule.packageName }
         if (index >= 0) current[index] = rule else current += rule
         dataStore.saveAppRules(current.sortedBy { it.appName.lowercase() })
@@ -342,6 +351,7 @@ class LayerRepository(
         localRuleSets: Map<String, String> = emptyMap(),
         remoteRuleSetFallback: Boolean = true,
         adBlockRuleSetPath: String? = null,
+        excludeDirectFromTun: Boolean = false,
     ): com.layer.core.config.ConfigGenerationResult {
         val snap = currentSnapshot()
         val serverId = snap.settings.activeServerId
@@ -356,21 +366,29 @@ class LayerRepository(
             remoteRuleSetFallback = remoteRuleSetFallback,
             adBlockRuleSetPath = adBlockRuleSetPath,
             logLevel = "warn",
+            excludeDirectFromTun = excludeDirectFromTun,
+            packagesSharingUid = ::packagesSharingUid,
         )
+    }
+
+    private fun packagesSharingUid(packageName: String): List<String>? {
+        val pm = context.packageManager
+        return runCatching {
+            val uid = pm.getPackageUid(packageName, PackageManager.PackageInfoFlags.of(0))
+            pm.getPackagesForUid(uid)?.toList()
+        }.getOrNull()
     }
 
     suspend fun installedApps(): List<InstalledApp> = withContext(Dispatchers.IO) {
         val pm = context.packageManager
         val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        val resolved = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            pm.queryIntentActivities(launcher, PackageManager.ResolveInfoFlags.of(0))
-        } else {
-            @Suppress("DEPRECATION")
-            pm.queryIntentActivities(launcher, 0)
-        }
+        val resolved = pm.queryIntentActivities(launcher, PackageManager.ResolveInfoFlags.of(0))
         resolved
             .map { it.activityInfo.applicationInfo }
-            .filter { it.packageName != context.packageName }
+            .filter {
+                it.packageName != context.packageName &&
+                    FixedAppRoutingPolicy.isUserConfigurable(it.packageName)
+            }
             .distinctBy { it.packageName }
             .map { info ->
                 InstalledApp(
@@ -434,12 +452,7 @@ class LayerRepository(
     private fun installedLabel(packageName: String): String? {
         val pm = context.packageManager
         return runCatching {
-            val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                pm.getApplicationInfo(packageName, PackageManager.ApplicationInfoFlags.of(0))
-            } else {
-                @Suppress("DEPRECATION")
-                pm.getApplicationInfo(packageName, 0)
-            }
+            val info = pm.getApplicationInfo(packageName, PackageManager.ApplicationInfoFlags.of(0))
             info.loadLabel(pm).toString()
         }.getOrNull()
     }

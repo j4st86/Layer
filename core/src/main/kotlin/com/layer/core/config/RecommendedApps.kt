@@ -24,7 +24,6 @@ object RecommendedApps {
         rec("Netflix", "com.netflix.mediaclient"),
         rec("Discord", "com.discord"),
         rec("X (Twitter)", "com.twitter.android"),
-        rec("Google Gemini", "com.google.android.apps.bard"),
         rec("Threads", "com.instagram.barcelona"),
         rec("TikTok", "com.zhiliaoapp.musically", "com.ss.android.ugc.trill"),
         rec("YouTube Morphe", "app.morphe.android.youtube"),

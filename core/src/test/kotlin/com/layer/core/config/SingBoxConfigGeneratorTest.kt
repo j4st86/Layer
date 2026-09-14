@@ -142,6 +142,8 @@ class SingBoxConfigGeneratorTest {
         assertTrue(quicReject > sniffIndex)
         assertTrue(proxyList > quicReject)
         assertEquals("5m", rules[proxyList].jsonObject["udp_timeout"]!!.jsonPrimitive.content)
+        assertFalse(json.contains("exclude_package"))
+        assertFalse(json.contains("include_package"))
     }
 
     @Test
@@ -204,23 +206,34 @@ class SingBoxConfigGeneratorTest {
         )
         assertTrue(json.contains("203.0.113.10/32"))
         assertTrue(json.contains("ipv4_only"))
-        val dnsDirect = root["dns"]!!.jsonObject["servers"]!!.jsonArray
+        val dnsServers = root["dns"]!!.jsonObject["servers"]!!.jsonArray
+        val dnsDirect = dnsServers
             .first { it.jsonObject["tag"]!!.jsonPrimitive.content == "dns-direct" }
             .jsonObject
+        assertEquals("local", dnsDirect["type"]!!.jsonPrimitive.content)
         assertFalse(dnsDirect.containsKey("detour"))
-        val dnsServers = root["dns"]!!.jsonObject["servers"]!!.jsonArray
-        assertFalse(dnsServers.any { it.jsonObject["tag"]?.jsonPrimitive?.content == "dns-vpn" })
+        val dnsProxy = dnsServers
+            .first { it.jsonObject["tag"]!!.jsonPrimitive.content == "dns-proxy" }
+            .jsonObject
+        assertEquals("udp", dnsProxy["type"]!!.jsonPrimitive.content)
+        assertEquals("8.8.8.8", dnsProxy["server"]!!.jsonPrimitive.content)
+        assertEquals("proxy", dnsProxy["detour"]!!.jsonPrimitive.content)
+        assertEquals("dns-direct", root["dns"]!!.jsonObject["final"]!!.jsonPrimitive.content)
         assertTrue(json.contains("\"download_detour\": \"proxy\""))
     }
 
     @Test
-    fun vpnListDnsGoesDirectNotThroughVision() {
+    fun dnsFollowsAppAndDomainRoutingWithoutAppDoh() {
         val json = SingBoxConfigGenerator.generate(
             uuid = sampleUuid,
             settings = sampleSettings,
-            appRules = emptyList(),
+            appRules = listOf(
+                AppRoutingRule("ru.bank.app", "Bank", AppRoutingMode.DIRECT),
+                AppRoutingRule("org.telegram.messenger", "Telegram", AppRoutingMode.VPN),
+            ),
             domainRules = listOf(
                 DomainRoutingRule("youtube.com", DomainRoutingMode.VPN),
+                DomainRoutingRule("bank.example", DomainRoutingMode.DIRECT),
             ),
             ownPackageName = "com.layer.app",
         ).json
@@ -229,10 +242,75 @@ class SingBoxConfigGeneratorTest {
         val vpnDns = dnsRules.first { rule ->
             rule.jsonObject["domain_suffix"]?.toString().orEmpty().contains("youtube.com")
         }.jsonObject
-        assertEquals("dns-direct", vpnDns["server"]!!.jsonPrimitive.content)
+        assertEquals("dns-proxy", vpnDns["server"]!!.jsonPrimitive.content)
         val autoDns = dnsRules.first { it.jsonObject.containsKey("rule_set") }.jsonObject
-        assertEquals("dns-direct", autoDns["server"]!!.jsonPrimitive.content)
-        assertFalse(json.contains("\"detour\": \"proxy\""))
+        assertEquals("dns-proxy", autoDns["server"]!!.jsonPrimitive.content)
+        val directDns = dnsRules.first { rule ->
+            rule.jsonObject["domain_suffix"]?.toString().orEmpty().contains("bank.example")
+        }.jsonObject
+        assertEquals("dns-direct", directDns["server"]!!.jsonPrimitive.content)
+        val directAppDns = dnsRules.first { rule ->
+            rule.jsonObject["package_name"]?.toString().orEmpty().contains("ru.bank.app")
+        }.jsonObject
+        assertEquals("dns-direct", directAppDns["server"]!!.jsonPrimitive.content)
+        val vpnAppDns = dnsRules.first { rule ->
+            rule.jsonObject["package_name"]?.toString().orEmpty().contains("org.telegram.messenger")
+        }.jsonObject
+        assertEquals("dns-proxy", vpnAppDns["server"]!!.jsonPrimitive.content)
+        assertEquals("dns-direct", root["dns"]!!.jsonObject["final"]!!.jsonPrimitive.content)
+        val dnsProxy = root["dns"]!!.jsonObject["servers"]!!.jsonArray
+            .first { it.jsonObject["tag"]!!.jsonPrimitive.content == "dns-proxy" }
+            .jsonObject
+        assertEquals("udp", dnsProxy["type"]!!.jsonPrimitive.content)
+        assertFalse(
+            root["dns"]!!.jsonObject["servers"]!!.jsonArray.any { server ->
+                server.jsonObject["type"]?.jsonPrimitive?.content == "https"
+            },
+        )
+    }
+
+    @Test
+    fun geminiAlwaysUsesDirectTrafficAndDedicatedPrivateDns() {
+        val json = SingBoxConfigGenerator.generate(
+            uuid = sampleUuid,
+            settings = sampleSettings,
+            appRules = listOf(
+                AppRoutingRule(
+                    FixedAppRoutingPolicy.GEMINI_PACKAGE,
+                    "Gemini",
+                    AppRoutingMode.VPN,
+                ),
+            ),
+            domainRules = emptyList(),
+            ownPackageName = "com.layer.app",
+            excludeDirectFromTun = true,
+        ).json
+        val root = Json.parseToJsonElement(json).jsonObject
+        val tun = root["inbounds"]!!.jsonArray.first().jsonObject
+        val excluded = tun["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content }
+        assertFalse(excluded.contains(FixedAppRoutingPolicy.GEMINI_PACKAGE))
+
+        assertTrue(routePackageNames(json, "direct").contains(FixedAppRoutingPolicy.GEMINI_PACKAGE))
+        assertFalse(routePackageNames(json, "proxy").contains(FixedAppRoutingPolicy.GEMINI_PACKAGE))
+
+        val dns = root["dns"]!!.jsonObject
+        val geminiServer = dns["servers"]!!.jsonArray
+            .first { it.jsonObject["tag"]!!.jsonPrimitive.content == FixedAppRoutingPolicy.GEMINI_DNS_TAG }
+            .jsonObject
+        assertEquals("tls", geminiServer["type"]!!.jsonPrimitive.content)
+        assertEquals(FixedAppRoutingPolicy.GEMINI_DNS_HOST, geminiServer["server"]!!.jsonPrimitive.content)
+        assertEquals(853, geminiServer["server_port"]!!.jsonPrimitive.content.toInt())
+        assertEquals("dns-local", geminiServer["domain_resolver"]!!.jsonPrimitive.content)
+        assertFalse(geminiServer.containsKey("detour"))
+
+        val geminiRule = dns["rules"]!!.jsonArray.first { rule ->
+            rule.jsonObject["package_name"]?.toString().orEmpty()
+                .contains(FixedAppRoutingPolicy.GEMINI_PACKAGE)
+        }.jsonObject
+        assertEquals(
+            FixedAppRoutingPolicy.GEMINI_DNS_TAG,
+            geminiRule["server"]!!.jsonPrimitive.content,
+        )
     }
 
     @Test
@@ -461,5 +539,219 @@ class SingBoxConfigGeneratorTest {
             adBlockRuleSetPath = null,
         ).json
         assertFalse(json.contains("rs-ads"))
+    }
+
+    @Test
+    fun tunExcludePackageBypassesDirectAppsWhenAllowed() {
+        val json = SingBoxConfigGenerator.generate(
+            uuid = sampleUuid,
+            settings = sampleSettings,
+            appRules = listOf(
+                AppRoutingRule("ru.bank.app", "Банк", AppRoutingMode.DIRECT),
+                AppRoutingRule("com.google.android.youtube", "YouTube", AppRoutingMode.VPN),
+                AppRoutingRule("com.android.chrome", "Chrome", AppRoutingMode.SMART),
+                AppRoutingRule("org.telegram.messenger", "Telegram", AppRoutingMode.VPN),
+            ),
+            domainRules = emptyList(),
+            ownPackageName = "com.layer.app",
+            excludeDirectFromTun = true,
+        ).json
+        val tun = Json.parseToJsonElement(json).jsonObject["inbounds"]!!.jsonArray.first().jsonObject
+        val excluded = tun["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content }
+        assertEquals(
+            listOf(
+                "com.google.android.gms",
+                "com.google.android.gsf",
+                "ru.bank.app",
+            ),
+            excluded,
+        )
+        assertFalse(excluded.contains("com.google.android.youtube"))
+        assertFalse(excluded.contains("org.telegram.messenger"))
+        assertFalse(excluded.contains("com.android.chrome"))
+        assertFalse(excluded.contains("com.layer.app"))
+        assertFalse(tun.containsKey("include_package"))
+        assertTrue(json.contains("ru.bank.app"))
+        assertTrue(json.contains("com.google.android.gms"))
+    }
+
+    @Test
+    fun tunExcludePackageOmittedUnderLockdown() {
+        val json = SingBoxConfigGenerator.generate(
+            uuid = sampleUuid,
+            settings = sampleSettings,
+            appRules = listOf(
+                AppRoutingRule("ru.bank.app", "Банк", AppRoutingMode.DIRECT),
+            ),
+            domainRules = emptyList(),
+            ownPackageName = "com.layer.app",
+            excludeDirectFromTun = false,
+        ).json
+        val tun = Json.parseToJsonElement(json).jsonObject["inbounds"]!!.jsonArray.first().jsonObject
+        assertFalse(tun.containsKey("exclude_package"))
+        assertTrue(json.contains("ru.bank.app"))
+        assertTrue(json.contains("com.google.android.gms"))
+    }
+
+    @Test
+    fun tunExcludeSkipsDirectAppThatSharesUidWithSmartBrowser() {
+        val json = SingBoxConfigGenerator.generate(
+            uuid = sampleUuid,
+            settings = sampleSettings,
+            appRules = listOf(
+                AppRoutingRule("ru.bank.app", "Банк", AppRoutingMode.DIRECT),
+            ),
+            domainRules = emptyList(),
+            ownPackageName = "com.layer.app",
+            excludeDirectFromTun = true,
+            packagesSharingUid = { pkg ->
+                when (pkg) {
+                    "ru.bank.app", "com.android.chrome" ->
+                        listOf("ru.bank.app", "com.android.chrome")
+                    else -> listOf(pkg)
+                }
+            },
+        ).json
+        val tun = Json.parseToJsonElement(json).jsonObject["inbounds"]!!.jsonArray.first().jsonObject
+        val excluded = tun["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content }
+        assertEquals(
+            listOf("com.google.android.gms", "com.google.android.gsf"),
+            excluded,
+        )
+        assertFalse(excluded.contains("ru.bank.app"))
+        assertFalse(excluded.contains("com.android.chrome"))
+        assertFalse(routePackageNames(json, "direct").contains("ru.bank.app"))
+        val automaticProxy = Json.parseToJsonElement(json).jsonObject["route"]!!.jsonObject["rules"]!!.jsonArray
+            .indexOfFirst { rule ->
+                val obj = rule.jsonObject
+                obj["outbound"]?.jsonPrimitive?.content == "proxy" &&
+                    obj["rule_set"]?.toString().orEmpty().contains("rs-youtube")
+            }
+        assertTrue(automaticProxy >= 0)
+    }
+
+    @Test
+    fun directAppWithUnresolvedUidIsNeitherExcludedNorRoutedDirect() {
+        val json = SingBoxConfigGenerator.generate(
+            uuid = sampleUuid,
+            settings = sampleSettings,
+            appRules = listOf(
+                AppRoutingRule("ru.missing.app", "Пропал", AppRoutingMode.DIRECT),
+            ),
+            domainRules = emptyList(),
+            ownPackageName = "com.layer.app",
+            excludeDirectFromTun = true,
+            packagesSharingUid = { pkg -> if (pkg == "ru.missing.app") null else listOf(pkg) },
+        ).json
+        val tun = Json.parseToJsonElement(json).jsonObject["inbounds"]!!.jsonArray.first().jsonObject
+        val excluded = tun["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content }
+        assertFalse(excluded.contains("ru.missing.app"))
+        assertFalse(routePackageNames(json, "direct").contains("ru.missing.app"))
+    }
+
+    @Test
+    fun sharedUidDirectPlusVpnKeepsVpnRuleAndDropsAppDirect() {
+        val json = SingBoxConfigGenerator.generate(
+            uuid = sampleUuid,
+            settings = sampleSettings,
+            appRules = listOf(
+                AppRoutingRule("com.termux", "Termux", AppRoutingMode.DIRECT),
+                AppRoutingRule("com.termux.styling", "Termux styling", AppRoutingMode.VPN),
+            ),
+            domainRules = emptyList(),
+            ownPackageName = "com.layer.app",
+            excludeDirectFromTun = true,
+            packagesSharingUid = { pkg ->
+                when (pkg) {
+                    "com.termux", "com.termux.styling" ->
+                        listOf("com.termux", "com.termux.styling")
+                    else -> listOf(pkg)
+                }
+            },
+        ).json
+        val tun = Json.parseToJsonElement(json).jsonObject["inbounds"]!!.jsonArray.first().jsonObject
+        val excluded = tun["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content }
+        assertFalse(excluded.contains("com.termux"))
+        assertFalse(excluded.contains("com.termux.styling"))
+        assertFalse(routePackageNames(json, "direct").contains("com.termux"))
+        assertTrue(routePackageNames(json, "proxy").contains("com.termux.styling"))
+    }
+
+    @Test
+    fun sharedUidOfDirectPackagesStaysDirectAndCanBeExcluded() {
+        val json = SingBoxConfigGenerator.generate(
+            uuid = sampleUuid,
+            settings = sampleSettings,
+            appRules = listOf(
+                AppRoutingRule("com.bank.main", "Bank", AppRoutingMode.DIRECT),
+                AppRoutingRule("com.bank.plugin", "Bank plugin", AppRoutingMode.DIRECT),
+            ),
+            domainRules = emptyList(),
+            ownPackageName = "com.layer.app",
+            excludeDirectFromTun = true,
+            packagesSharingUid = { pkg ->
+                when (pkg) {
+                    "com.bank.main", "com.bank.plugin" ->
+                        listOf("com.bank.main", "com.bank.plugin")
+                    else -> listOf(pkg)
+                }
+            },
+        ).json
+        val tun = Json.parseToJsonElement(json).jsonObject["inbounds"]!!.jsonArray.first().jsonObject
+        val excluded = tun["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content }
+        assertTrue(excluded.contains("com.bank.main"))
+        assertTrue(excluded.contains("com.bank.plugin"))
+        val direct = routePackageNames(json, "direct")
+        assertTrue(direct.contains("com.bank.main"))
+        assertTrue(direct.contains("com.bank.plugin"))
+    }
+
+    @Test
+    fun unlistedBrowserStaysInTunAndAutomaticDomainsStillProxy() {
+        val json = SingBoxConfigGenerator.generate(
+            uuid = sampleUuid,
+            settings = sampleSettings,
+            appRules = listOf(
+                AppRoutingRule("ru.bank.app", "Банк", AppRoutingMode.DIRECT),
+            ),
+            domainRules = emptyList(),
+            ownPackageName = "com.layer.app",
+            excludeDirectFromTun = true,
+        ).json
+        val root = Json.parseToJsonElement(json).jsonObject
+        val tun = root["inbounds"]!!.jsonArray.first().jsonObject
+        val excluded = tun["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content }
+        assertTrue(excluded.contains("ru.bank.app"))
+        assertFalse(excluded.contains("org.mozilla.firefox"))
+        assertFalse(excluded.contains("com.android.chrome"))
+        assertFalse(tun.containsKey("include_package"))
+
+        val routeRules = root["route"]!!.jsonObject["rules"]!!.jsonArray
+        val automaticProxy = routeRules.indexOfFirst { rule ->
+            val obj = rule.jsonObject
+            obj["outbound"]?.jsonPrimitive?.content == "proxy" &&
+                obj["rule_set"]?.toString().orEmpty().contains("rs-youtube")
+        }
+        assertTrue(automaticProxy >= 0)
+        val appDirect = routeRules.indexOfFirst { rule ->
+            val obj = rule.jsonObject
+            obj["outbound"]?.jsonPrimitive?.content == "direct" &&
+                obj["package_name"]?.toString().orEmpty().contains("ru.bank.app")
+        }
+        assertTrue(appDirect >= 0)
+        assertTrue(automaticProxy > appDirect)
+        assertEquals("direct", root["route"]!!.jsonObject["final"]!!.jsonPrimitive.content)
+    }
+
+    private fun routePackageNames(json: String, outbound: String): List<String> {
+        val rules = Json.parseToJsonElement(json).jsonObject["route"]!!.jsonObject["rules"]!!.jsonArray
+        return rules.flatMap { rule ->
+            val obj = rule.jsonObject
+            if (obj["outbound"]?.jsonPrimitive?.content != outbound) {
+                emptyList()
+            } else {
+                obj["package_name"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
+            }
+        }
     }
 }

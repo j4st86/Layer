@@ -145,33 +145,23 @@ object DiagnosticReport {
 
     private fun writeToDownloads(context: Context, name: String, text: String): String {
         val relative = "${Environment.DIRECTORY_DOWNLOADS}/$LOGS_FOLDER"
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val values = ContentValues().apply {
-                put(MediaStore.Downloads.DISPLAY_NAME, name)
-                put(MediaStore.Downloads.MIME_TYPE, "text/plain")
-                put(MediaStore.Downloads.RELATIVE_PATH, "$relative/")
-                put(MediaStore.Downloads.IS_PENDING, 1)
-            }
-            val resolver = context.contentResolver
-            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                ?: error("Downloads insert failed")
-            resolver.openOutputStream(uri)?.use { stream ->
-                stream.write(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()))
-                stream.write(text.toByteArray(Charsets.UTF_8))
-            }
-                ?: error("Downloads stream failed")
-            values.clear()
-            values.put(MediaStore.Downloads.IS_PENDING, 0)
-            resolver.update(uri, values, null, null)
-            return "$relative/$name"
+        val values = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, name)
+            put(MediaStore.Downloads.MIME_TYPE, "text/plain")
+            put(MediaStore.Downloads.RELATIVE_PATH, "$relative/")
+            put(MediaStore.Downloads.IS_PENDING, 1)
         }
-        val dir = File(
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-            LOGS_FOLDER,
-        )
-        dir.mkdirs()
-        val file = File(dir, name)
-        file.writeText(text, Charsets.UTF_8)
-        return file.absolutePath
+        val resolver = context.contentResolver
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            ?: error("Downloads insert failed")
+        resolver.openOutputStream(uri)?.use { stream ->
+            stream.write(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()))
+            stream.write(text.toByteArray(Charsets.UTF_8))
+        }
+            ?: error("Downloads stream failed")
+        values.clear()
+        values.put(MediaStore.Downloads.IS_PENDING, 0)
+        resolver.update(uri, values, null, null)
+        return "$relative/$name"
     }
 }

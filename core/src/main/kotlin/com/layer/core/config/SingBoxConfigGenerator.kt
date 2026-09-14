@@ -54,6 +54,8 @@ object SingBoxConfigGenerator {
         remoteRuleSetFallback: Boolean = true,
         adBlockRuleSetPath: String? = null,
         logLevel: String = "warn",
+        excludeDirectFromTun: Boolean = false,
+        packagesSharingUid: (String) -> Collection<String>? = { listOf(it) },
     ): ConfigGenerationResult {
         val trimmedUuid = VlessLinkParser.extractUuid(uuid)
         if (trimmedUuid.isNullOrBlank()) {
@@ -92,8 +94,15 @@ object SingBoxConfigGenerator {
         val alpn = config.alpn.ifBlank { "http/1.1" }
         val dialAddress = resolvedServerIp?.takeIf { it.isNotBlank() } ?: server
 
-        val directApps = appRules.filter { it.mode == AppRoutingMode.DIRECT }.map { it.packageName }
-        val vpnApps = appRules.filter { it.mode == AppRoutingMode.VPN }.map { it.packageName }
+        val configurableAppRules = appRules.filter {
+            FixedAppRoutingPolicy.isUserConfigurable(it.packageName)
+        }
+        val directApps = configurableAppRules
+            .filter { it.mode == AppRoutingMode.DIRECT }
+            .map { it.packageName }
+        val vpnApps = configurableAppRules
+            .filter { it.mode == AppRoutingMode.VPN }
+            .map { it.packageName }
         val directDomains = domainRules
             .filter { it.mode == DomainRoutingMode.DIRECT }
             .map { HostnameNormalizer.normalize(it.domain).domain }
@@ -110,6 +119,14 @@ object SingBoxConfigGenerator {
         val adBlockPath = adBlockRuleSetPath?.takeIf {
             settings.adBlockEnabled && it.isNotBlank()
         }
+        val uidDecision = TunDirectExcludePolicy.decide(
+            excludeDirectFromTun = excludeDirectFromTun,
+            directApps = directApps,
+            vpnApps = vpnApps,
+            packagesSharingUid = packagesSharingUid,
+        )
+        val excludePackages = uidDecision.packages
+        val routeDirectApps = uidDecision.routeDirectApps
 
         val generated = buildJsonObject {
             putJsonObject("log") {
@@ -120,6 +137,8 @@ object SingBoxConfigGenerator {
                 "dns",
                 buildDns(
                     server = server,
+                    directApps = routeDirectApps,
+                    vpnApps = vpnApps,
                     directDomains = directDomains,
                     vpnDomains = vpnDomains,
                     automaticTags = automaticTags,
@@ -128,7 +147,7 @@ object SingBoxConfigGenerator {
                 ),
             )
             putJsonArray("inbounds") {
-                add(buildTun(settings.ipv6Enabled))
+                add(buildTun(settings.ipv6Enabled, excludePackages))
             }
             putJsonArray("outbounds") {
                 add(
@@ -154,7 +173,7 @@ object SingBoxConfigGenerator {
                     server = server,
                     resolvedServerIp = resolvedServerIp,
                     ownPackageName = ownPackageName,
-                    directApps = directApps,
+                    directApps = routeDirectApps,
                     vpnApps = vpnApps,
                     directDomains = directDomains,
                     vpnDomains = vpnDomains,
@@ -178,21 +197,45 @@ object SingBoxConfigGenerator {
 
     private fun buildDns(
         server: String,
+        directApps: List<String>,
+        vpnApps: List<String>,
         directDomains: List<String>,
         vpnDomains: List<String>,
         automaticTags: List<String>,
         ipv6Enabled: Boolean,
         adBlockEnabled: Boolean,
     ): JsonObject = buildJsonObject {
+        val dnsDirectApps = LinkedHashSet<String>().apply {
+            addAll(PushDirectPackages.packages)
+            addAll(directApps)
+        }
         putJsonArray("servers") {
             add(buildJsonObject {
                 put("type", "local")
                 put("tag", "dns-local")
             })
+            // DIRECT names stay on the OS resolver. Naked DoH to 8.8.8.8:443
+            // is RST on several mobile networks, which retries FCM/WhatsApp
+            // and holds the radio. Do not send this through Vision: a second
+            // TLS inside VLESS cancelled Telegram dials.
             add(buildJsonObject {
-                put("type", "https")
+                put("type", "local")
                 put("tag", "dns-direct")
+            })
+            // VPN / automatic / default names need unpoisoned answers, so
+            // UDP/53 rides the existing VLESS (xudp), not a new HTTPS stream.
+            add(buildJsonObject {
+                put("type", "udp")
+                put("tag", "dns-proxy")
                 put("server", "8.8.8.8")
+                put("detour", "proxy")
+            })
+            add(buildJsonObject {
+                put("type", "tls")
+                put("tag", FixedAppRoutingPolicy.GEMINI_DNS_TAG)
+                put("server", FixedAppRoutingPolicy.GEMINI_DNS_HOST)
+                put("server_port", 853)
+                put("domain_resolver", "dns-local")
             })
         }
         putJsonArray("rules") {
@@ -201,6 +244,25 @@ object SingBoxConfigGenerator {
                 put("action", "route")
                 put("server", "dns-local")
             })
+            add(buildJsonObject {
+                putJsonArray("package_name") { add(FixedAppRoutingPolicy.GEMINI_PACKAGE) }
+                put("action", "route")
+                put("server", FixedAppRoutingPolicy.GEMINI_DNS_TAG)
+            })
+            if (dnsDirectApps.isNotEmpty()) {
+                add(buildJsonObject {
+                    putJsonArray("package_name") { dnsDirectApps.forEach { add(it) } }
+                    put("action", "route")
+                    put("server", "dns-direct")
+                })
+            }
+            if (vpnApps.isNotEmpty()) {
+                add(buildJsonObject {
+                    putJsonArray("package_name") { vpnApps.forEach { add(it) } }
+                    put("action", "route")
+                    put("server", "dns-proxy")
+                })
+            }
             if (directDomains.isNotEmpty()) {
                 add(buildJsonObject {
                     putJsonArray("domain_suffix") { directDomains.forEach { add(it) } }
@@ -218,14 +280,14 @@ object SingBoxConfigGenerator {
                 add(buildJsonObject {
                     putJsonArray("domain_suffix") { vpnDomains.forEach { add(it) } }
                     put("action", "route")
-                    put("server", "dns-direct")
+                    put("server", "dns-proxy")
                 })
             }
             if (automaticTags.isNotEmpty()) {
                 add(buildJsonObject {
                     putJsonArray("rule_set") { automaticTags.forEach { add(it) } }
                     put("action", "route")
-                    put("server", "dns-direct")
+                    put("server", "dns-proxy")
                 })
             }
         }
@@ -235,7 +297,7 @@ object SingBoxConfigGenerator {
         put("reverse_mapping", true)
     }
 
-    private fun buildTun(ipv6: Boolean): JsonObject = buildJsonObject {
+    private fun buildTun(ipv6: Boolean, excludePackages: List<String>): JsonObject = buildJsonObject {
         put("type", "tun")
         put("tag", "tun-in")
         putJsonArray("address") {
@@ -257,6 +319,13 @@ object SingBoxConfigGenerator {
         // Sniffed QUIC otherwise expires in 30s; the next datagram is a new
         // connection without ClientHello and falls through to DIRECT.
         put("udp_timeout", "5m")
+        // Off the VPN fd. Route DIRECT for the same packages stays as fallback
+        // when lockdown skips addDisallowedApplication.
+        if (excludePackages.isNotEmpty()) {
+            putJsonArray("exclude_package") {
+                excludePackages.forEach { add(it) }
+            }
+        }
     }
 
     private fun buildVless(
@@ -438,6 +507,10 @@ object SingBoxConfigGenerator {
                     put("outbound", "direct")
                 })
             }
+            add(buildJsonObject {
+                putJsonArray("package_name") { add(FixedAppRoutingPolicy.GEMINI_PACKAGE) }
+                put("outbound", "direct")
+            })
             add(buildJsonObject {
                 putJsonArray("package_name") {
                     PushDirectPackages.packages.forEach { add(it) }

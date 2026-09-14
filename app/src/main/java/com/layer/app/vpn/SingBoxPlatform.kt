@@ -1,5 +1,9 @@
 package com.layer.app.vpn
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.LinkProperties
@@ -9,6 +13,8 @@ import android.net.NetworkRequest
 import android.os.Build
 import android.os.Process
 import android.system.OsConstants
+import androidx.core.content.ContextCompat
+import com.layer.core.config.UidPackageCache
 import com.layer.core.diagnostics.LogSanitizer
 import io.nekohasekai.libbox.BridgeOptions
 import io.nekohasekai.libbox.BridgeSession
@@ -33,6 +39,33 @@ import io.nekohasekai.libbox.NetworkInterface as LibboxNetworkInterface
 class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface {
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var protectCount = 0
+    private val uidPackages = UidPackageCache()
+    private val packageReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            uidPackages.clear()
+            if (intent == null) return
+            val replacing = intent.getBooleanExtra(Intent.EXTRA_REPLACING, false)
+            if (replacing && intent.action != Intent.ACTION_PACKAGE_REPLACED) return
+            val pkg = intent.data?.schemeSpecificPart
+            if (pkg == service.packageName) return
+            service.onInstalledPackagesChanged()
+        }
+    }
+
+    init {
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addAction(Intent.ACTION_PACKAGE_REMOVED)
+            addAction(Intent.ACTION_PACKAGE_REPLACED)
+            addDataScheme("package")
+        }
+        ContextCompat.registerReceiver(
+            service,
+            packageReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+    }
 
     @Volatile
     var underlyingNetwork: Network? = null
@@ -56,7 +89,7 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
 
     override fun openTun(options: TunOptions): Int = service.openTun(options)
 
-    override fun useProcFS(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+    override fun useProcFS(): Boolean = false
 
     override fun findConnectionOwner(
         ipProtocol: Int,
@@ -65,21 +98,24 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
         destinationAddress: String,
         destinationPort: Int,
     ): ConnectionOwner {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            error("android: connection owner requires API 29")
-        }
         val uid = connectivity.getConnectionOwnerUid(
             ipProtocol,
             InetSocketAddress(sourceAddress, sourcePort),
             InetSocketAddress(destinationAddress, destinationPort),
         )
         if (uid == Process.INVALID_UID) error("android: connection owner not found")
-        val packages = service.packageManager.getPackagesForUid(uid)
+        val packages = uidPackages.packages(uid) { service.packageManager.getPackagesForUid(it) }
         return ConnectionOwner().apply {
             userId = uid
-            userName = packages?.firstOrNull().orEmpty()
-            setAndroidPackageNames(StringArray(packages?.toList().orEmpty()))
+            userName = packages.firstOrNull().orEmpty()
+            setAndroidPackageNames(StringArray(packages))
         }
+    }
+
+    fun close() {
+        runCatching { service.unregisterReceiver(packageReceiver) }
+        unregisterNetworkCallback()
+        uidPackages.clear()
     }
 
     override fun startDefaultInterfaceMonitor(listener: InterfaceUpdateListener) {
@@ -164,10 +200,13 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
     }
 
     override fun closeDefaultInterfaceMonitor(listener: InterfaceUpdateListener) {
-        networkCallback?.let {
-            runCatching { connectivity.unregisterNetworkCallback(it) }
-            networkCallback = null
-        }
+        unregisterNetworkCallback()
+    }
+
+    private fun unregisterNetworkCallback() {
+        val callback = networkCallback ?: return
+        networkCallback = null
+        runCatching { connectivity.unregisterNetworkCallback(callback) }
     }
 
     override fun getInterfaces(): NetworkInterfaceIterator {
@@ -308,20 +347,18 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
     }
 
     override fun lookupUser(username: String): PlatformUser {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val info = runCatching {
-                service.packageManager.getApplicationInfo(
-                    username,
-                    PackageManager.ApplicationInfoFlags.of(0),
-                )
-            }.getOrNull()
-            if (info != null) {
-                return PlatformUser().apply {
-                    this.username = username
-                    uid = info.uid
-                    gid = info.uid
-                    homeDir = info.dataDir.orEmpty()
-                }
+        val info = runCatching {
+            service.packageManager.getApplicationInfo(
+                username,
+                PackageManager.ApplicationInfoFlags.of(0),
+            )
+        }.getOrNull()
+        if (info != null) {
+            return PlatformUser().apply {
+                this.username = username
+                uid = info.uid
+                gid = info.uid
+                homeDir = info.dataDir.orEmpty()
             }
         }
         error("user not found")

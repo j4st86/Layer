@@ -41,7 +41,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun DiagnosticsScreen(onBack: () -> Unit) {
     val container = LocalAppContainer.current
-    val entries by container.diagnostics.entries.collectAsStateWithLifecycle()
+    val entries by container.diagnostics.entries.collectAsStateWithLifecycle(emptyList())
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -93,7 +93,7 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
                     )
                 }
             }
-            items(entries.reversed()) { entry ->
+            items(entries.asReversed()) { entry ->
                 ListItem(
                     overlineContent = { Text(entry.time) },
                     headlineContent = { Text(entry.message) },

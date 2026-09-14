@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.IpPrefix
 import android.net.NetworkCapabilities
@@ -20,6 +21,8 @@ import com.layer.app.data.RuleSetDownloader
 import com.layer.core.config.RuleSetCatalog
 import com.layer.core.config.AutoServerPolicy
 import com.layer.core.config.IdleRecoveryPolicy
+import com.layer.core.config.TunDirectExcludePolicy
+import com.layer.core.model.AppRoutingMode
 import com.layer.core.diagnostics.Branding
 import com.layer.core.diagnostics.ErrorMapper
 import com.layer.core.diagnostics.LogSanitizer
@@ -50,14 +53,18 @@ import java.net.InetAddress
 class LayerVpnService : VpnService(), CommandServerHandler {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lifecycleMutex = Mutex()
+    private val runtimeLock = Any()
     private val notification by lazy { VpnNotification(this) }
-    private var vpnFd: ParcelFileDescriptor? = null
-    private var commandServer: CommandServer? = null
-    private var logClient: CommandClient? = null
-    private var platform: SingBoxPlatform? = null
+    // Stop runs on the main thread while start/reload run on Dispatchers.IO
+    // under lifecycleMutex, so both sides must see these writes.
+    @Volatile private var vpnFd: ParcelFileDescriptor? = null
+    @Volatile private var commandServer: CommandServer? = null
+    @Volatile private var logClient: CommandClient? = null
+    @Volatile private var platform: SingBoxPlatform? = null
 
     private val container get() = (application as LayerApp).container
-    private var stopping = false
+    @Volatile private var stopping = false
+    private var runtimeGeneration = 0L
     private var serverName: String = ""
     private var screenReceiver: BroadcastReceiver? = null
     private var startedElapsed = 0L
@@ -66,6 +73,8 @@ class LayerVpnService : VpnService(), CommandServerHandler {
     private var lastScreenOffElapsed = 0L
     private var idlePokeJob: Job? = null
     private var logClientStatusIntervalNs = 0L
+    @Volatile private var lastExcludeDirectFromTun: Boolean? = null
+    @Volatile private var lastAppliedExcludePackages: List<String>? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action != ACTION_STOP) {
@@ -90,7 +99,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             }
             else -> {
                 // START, Always-on VPN, or reboot: system may pass a null action.
-                stopping = false
+                val requestGeneration = synchronized(runtimeLock) { runtimeGeneration }
                 val state = VpnStatusStore.status.value.state
                 if (commandServer != null &&
                     (state == VpnConnectionState.CONNECTED ||
@@ -100,7 +109,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
                     dbg("[VPN] event=start action=skip reason=already-running state=$state")
                     return START_STICKY
                 }
-                scope.launch { startVpn() }
+                scope.launch { startVpn(requestGeneration) }
                 return START_STICKY
             }
         }
@@ -134,7 +143,17 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         super.onRevoke()
     }
 
-    private suspend fun startVpn() = lifecycleMutex.withLock { startVpnLocked() }
+    private suspend fun startVpn(requestGeneration: Long) = lifecycleMutex.withLock {
+        val currentRequest = synchronized(runtimeLock) {
+            if (runtimeGeneration != requestGeneration) {
+                false
+            } else {
+                stopping = false
+                true
+            }
+        }
+        if (currentRequest) startVpnLocked()
+    }
 
     private suspend fun startVpnLocked() {
         if (stopping) return
@@ -191,11 +210,10 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         if (stopping) return
         val prepared = prepareLists()
         if (stopping) return
-        val generated = container.repository.buildConfig(
+        val generated = buildRunningConfig(
             resolved.ip,
-            prepared.ruleSets,
+            prepared,
             remoteRuleSetFallback = false,
-            adBlockRuleSetPath = prepared.adBlockPath,
         )
         if (stopping) return
         if (!generated.isSuccess) {
@@ -214,7 +232,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             commandServer = ensureCommandServer()
             dbg("[VPN] event=start-or-reload")
             commandServer?.startOrReloadService(generated.json, OverrideOptions())
-            if (stopping) return
+            if (abortIfStopping("start")) return
             startedElapsed = SystemClock.elapsedRealtime()
             lastIdleRecoverElapsed = startedElapsed
             lastScreenOffElapsed = 0L
@@ -229,6 +247,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             container.connectionPing.measureAfterConnected("connected")
             tryPromoteRuleSetsViaProxy(resolved.ip, prepared)
         } catch (error: Exception) {
+            if (abortIfStopping("start-error")) return
             fail(combineErrors(error))
         }
     }
@@ -252,11 +271,10 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         val prepared = prepareLists()
         val wantRemoteLists = settings.automaticRuleSetEnabled &&
             prepared.ruleSets.size < RuleSetCatalog.vpnLists.size
-        val generated = container.repository.buildConfig(
+        val generated = buildRunningConfig(
             resolved.ip,
-            prepared.ruleSets,
+            prepared,
             remoteRuleSetFallback = wantRemoteLists,
-            adBlockRuleSetPath = prepared.adBlockPath,
         )
         if (!generated.isSuccess) {
             fail(generated.error ?: getString(R.string.error_config))
@@ -269,7 +287,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             }
             if (stopping) return
             commandServer?.startOrReloadService(generated.json, OverrideOptions())
-            if (stopping) return
+            if (abortIfStopping("reload")) return
             startedElapsed = SystemClock.elapsedRealtime()
             lastIdleRecoverElapsed = startedElapsed
             lastScreenOffElapsed = 0L
@@ -282,6 +300,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             // copies are missing. A second startOrReloadService here tore TUN
             // down again and Telegram's reconnect landed on a dying stack.
         } catch (error: Exception) {
+            if (abortIfStopping("reload-error")) return
             fail(combineErrors(error))
         }
     }
@@ -293,11 +312,10 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         if (stopping) return
         val enabled = container.repository.currentSnapshot().settings.automaticRuleSetEnabled
         if (stopping || !enabled || prepared.ruleSets.size >= RuleSetCatalog.vpnLists.size) return
-        val withRemote = container.repository.buildConfig(
+        val withRemote = buildRunningConfig(
             resolvedIp,
-            prepared.ruleSets,
+            prepared,
             remoteRuleSetFallback = true,
-            adBlockRuleSetPath = prepared.adBlockPath,
         )
         if (!withRemote.isSuccess) return
         if (runCatching { Libbox.checkConfig(withRemote.json) }.isFailure) return
@@ -305,23 +323,24 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         val promoted = runCatching {
             commandServer?.startOrReloadService(withRemote.json, OverrideOptions())
         }
+        if (abortIfStopping("promote")) return
         if (promoted.isSuccess) {
             dbg("[RULE] event=promote action=ok via=proxy")
             return
         }
         dbg("[RULE] event=promote action=fail via=proxy error=${promoted.exceptionOrNull()?.message}")
 
-        val withoutRemote = container.repository.buildConfig(
+        val withoutRemote = buildRunningConfig(
             resolvedIp,
-            prepared.ruleSets,
+            prepared,
             remoteRuleSetFallback = false,
-            adBlockRuleSetPath = prepared.adBlockPath,
         )
         val reverted = runCatching {
             check(withoutRemote.isSuccess) { withoutRemote.error ?: getString(R.string.error_config) }
             Libbox.checkConfig(withoutRemote.json)
             commandServer?.startOrReloadService(withoutRemote.json, OverrideOptions())
         }
+        if (abortIfStopping("promote-revert")) return
         if (reverted.isFailure) {
             dbg(
                 "[RULE] event=promote action=revert-fail " +
@@ -333,12 +352,33 @@ class LayerVpnService : VpnService(), CommandServerHandler {
     }
 
     private fun ensureCommandServer(): CommandServer {
-        commandServer?.let { return it }
-        val iface = platform ?: SingBoxPlatform(this).also { platform = it }
+        synchronized(runtimeLock) {
+            commandServer?.let { return it }
+            check(!stopping) { "android: VPN is stopping" }
+        }
+        val iface = SingBoxPlatform(this)
         dbg("[BOX] event=command-server-start libbox=${Branding.libboxVersion(runCatching { Libbox.version() }.getOrNull())}")
-        val server = CommandServer(this, iface)
-        server.start()
-        commandServer = server
+        val server = try {
+            CommandServer(this, iface).also { it.start() }
+        } catch (error: Exception) {
+            iface.close()
+            throw error
+        }
+        val accepted = synchronized(runtimeLock) {
+            if (stopping) {
+                false
+            } else {
+                platform = iface
+                commandServer = server
+                true
+            }
+        }
+        if (!accepted) {
+            runCatching { server.closeService() }
+            runCatching { server.close() }
+            iface.close()
+            error("android: VPN stopped while starting command server")
+        }
         attachLogClient()
         return server
     }
@@ -354,9 +394,14 @@ class LayerVpnService : VpnService(), CommandServerHandler {
 
     private fun attachLogClient(force: Boolean = true) {
         val interval = desiredStatusIntervalNs()
-        if (!force && logClient != null && logClientStatusIntervalNs == interval) return
-        runCatching { logClient?.disconnect() }
-        logClient = null
+        val previous = synchronized(runtimeLock) {
+            if (!force && logClient != null && logClientStatusIntervalNs == interval) return
+            logClient.also {
+                logClient = null
+                logClientStatusIntervalNs = 0L
+            }
+        }
+        runCatching { previous?.disconnect() }
         val options = CommandClientOptions().apply {
             addCommand(Libbox.CommandLog)
             addCommand(Libbox.CommandStatus)
@@ -372,8 +417,19 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         } else {
             dbg("[BOX] event=log-client action=ok intervalNs=$interval")
         }
-        logClient = client
-        logClientStatusIntervalNs = interval
+        val accepted = synchronized(runtimeLock) {
+            if (stopping || commandServer == null) {
+                false
+            } else {
+                logClient = client
+                logClientStatusIntervalNs = interval
+                true
+            }
+        }
+        if (!accepted) {
+            runCatching { client.disconnect() }
+            dbg("[BOX] event=log-client action=discard reason=stopping")
+        }
     }
 
     private fun retuneLogClient() {
@@ -386,30 +442,76 @@ class LayerVpnService : VpnService(), CommandServerHandler {
     }
 
     private fun stopVpn() {
-        if (stopping) return
-        stopping = true
+        val firstStop = synchronized(runtimeLock) {
+            if (stopping) {
+                false
+            } else {
+                stopping = true
+                runtimeGeneration += 1
+                true
+            }
+        }
+        if (!firstStop) {
+            // A previous teardown may have raced a late native callback.
+            releaseRuntime()
+            return
+        }
         dbg("[VPN] event=stop")
         container.autoServerSelector.stopMonitoring()
         container.connectionPing.clear()
         unregisterIdleRecovery()
         VpnStatusStore.clearTraffic()
         VpnStatusStore.update(VpnUiStatus(VpnConnectionState.DISCONNECTED, getString(R.string.status_disconnected_short)))
-        runCatching { logClient?.disconnect() }
-        runCatching { commandServer?.closeService() }
-        runCatching { commandServer?.close() }
-        runCatching { vpnFd?.close() }
-        logClient = null
-        logClientStatusIntervalNs = 0L
-        commandServer = null
-        vpnFd = null
-        platform = null
-        startedElapsed = 0L
-        lastIdleRecoverElapsed = 0L
-        lastHandoffWakeElapsed = 0L
-        lastScreenOffElapsed = 0L
+        releaseRuntime()
         notification.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    /**
+     * Idempotent teardown of everything start/reload may have created.
+     * Stop happens outside [lifecycleMutex] (onDestroy cancels [scope], so it
+     * cannot wait for the lock), therefore an in-flight start can still create
+     * a platform / command server after stop tore things down. Those paths call
+     * this again once they observe [stopping].
+     */
+    private fun releaseRuntime() {
+        val resources = synchronized(runtimeLock) {
+            RuntimeResources(logClient, commandServer, vpnFd, platform).also {
+                logClient = null
+                logClientStatusIntervalNs = 0L
+                commandServer = null
+                vpnFd = null
+                platform = null
+                startedElapsed = 0L
+                lastIdleRecoverElapsed = 0L
+                lastHandoffWakeElapsed = 0L
+                lastScreenOffElapsed = 0L
+                lastExcludeDirectFromTun = null
+                lastAppliedExcludePackages = null
+            }
+        }
+        runCatching { resources.logClient?.disconnect() }
+        runCatching { resources.commandServer?.closeService() }
+        runCatching { resources.commandServer?.close() }
+        runCatching { resources.vpnFd?.close() }
+        resources.platform?.close()
+    }
+
+    private data class RuntimeResources(
+        val logClient: CommandClient?,
+        val commandServer: CommandServer?,
+        val vpnFd: ParcelFileDescriptor?,
+        val platform: SingBoxPlatform?,
+    )
+
+    private fun abortIfStopping(path: String): Boolean {
+        if (!stopping) return false
+        if (commandServer != null || platform != null || vpnFd != null || logClient != null) {
+            dbg("[VPN] event=stop action=release-late path=$path")
+        }
+        releaseRuntime()
+        return true
     }
 
     private data class PreparedLists(
@@ -488,15 +590,119 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             .ifBlank { error.toString() }
     }
 
+    private suspend fun buildRunningConfig(
+        resolvedIp: String?,
+        prepared: PreparedLists,
+        remoteRuleSetFallback: Boolean,
+    ): com.layer.core.config.ConfigGenerationResult {
+        val exclude = excludeDirectFromTun()
+        val snap = container.repository.currentSnapshot()
+        val decision = TunDirectExcludePolicy.decide(
+            excludeDirectFromTun = exclude,
+            directApps = snap.appRules
+                .filter { it.mode == AppRoutingMode.DIRECT }
+                .map { it.packageName },
+            vpnApps = snap.appRules
+                .filter { it.mode == AppRoutingMode.VPN }
+                .map { it.packageName },
+            packagesSharingUid = ::packagesSharingUid,
+        )
+        dbg(
+            "[TUN] event=exclude-direct enabled=$exclude " +
+                "lockdown=${lockdownEnabled()} sdk=${Build.VERSION.SDK_INT} " +
+                "count=${decision.packages.size} skipped=${decision.skipped.size}",
+        )
+        decision.skipped.forEach { skip ->
+            dbg(
+                "[TUN] event=exclude-skip pkg=${skip.packageName} " +
+                    "reason=${skip.reason} uid=${skip.uidPackages.joinToString()}",
+            )
+        }
+        return container.repository.buildConfig(
+            resolvedIp,
+            prepared.ruleSets,
+            remoteRuleSetFallback = remoteRuleSetFallback,
+            adBlockRuleSetPath = prepared.adBlockPath,
+            excludeDirectFromTun = exclude,
+        )
+    }
+
+    private fun lockdownEnabled(): Boolean {
+        return runCatching { isLockdownEnabled() }.getOrDefault(true)
+    }
+
+    private fun excludeDirectFromTun(): Boolean = !lockdownEnabled()
+
+    private fun packagesSharingUid(packageName: String): List<String>? {
+        return runCatching {
+            val uid = packageManager.getPackageUid(
+                packageName,
+                PackageManager.PackageInfoFlags.of(0),
+            )
+            packageManager.getPackagesForUid(uid)?.toList()
+        }.getOrNull()
+    }
+
+    fun onInstalledPackagesChanged() {
+        recheckTunExclusions("package-changed")
+    }
+
+    private fun recheckTunExclusions(reason: String) {
+        if (stopping || commandServer == null) return
+        scope.launch { recheckTunExclusionsLocked(reason) }
+    }
+
+    private suspend fun recheckTunExclusionsLocked(reason: String) {
+        lifecycleMutex.withLock {
+            if (stopping || commandServer == null) return
+            val appliedMode = lastExcludeDirectFromTun ?: return
+            val appliedPackages = lastAppliedExcludePackages ?: return
+            val wantMode = excludeDirectFromTun()
+            val snap = container.repository.currentSnapshot()
+            val wantPackages = if (!wantMode) {
+                emptyList()
+            } else {
+                TunDirectExcludePolicy.packages(
+                    excludeDirectFromTun = true,
+                    directApps = snap.appRules
+                        .filter { it.mode == AppRoutingMode.DIRECT }
+                        .map { it.packageName },
+                    vpnApps = snap.appRules
+                        .filter { it.mode == AppRoutingMode.VPN }
+                        .map { it.packageName },
+                    packagesSharingUid = ::packagesSharingUid,
+                )
+            }
+            if (appliedMode == wantMode && appliedPackages.toSet() == wantPackages.toSet()) return
+            dbg(
+                "[VPN] event=reload path=tun-exclude reason=$reason " +
+                    "mode=$appliedMode->$wantMode " +
+                    "packages=${appliedPackages.size}->${wantPackages.size}",
+            )
+            reloadInternalLocked()
+        }
+    }
+
     private fun fail(raw: String?) {
-        if (stopping) return
+        val firstFailure = synchronized(runtimeLock) {
+            if (stopping) {
+                false
+            } else {
+                stopping = true
+                runtimeGeneration += 1
+                true
+            }
+        }
+        if (!firstFailure) {
+            releaseRuntime()
+            return
+        }
         val mapped = ErrorMapper.map(raw)
         val sanitizedRaw = LogSanitizer.sanitize(raw)
         dbg(
             "[VPN] event=fail kind=${mapped.kind} " +
                 "raw=${sanitizedRaw.ifBlank { "-" }}",
         )
-        stopping = true
         container.autoServerSelector.stopMonitoring()
         container.connectionPing.clear()
         unregisterIdleRecovery()
@@ -509,19 +715,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
                 errorDetails = mapped.details,
             ),
         )
-        runCatching { logClient?.disconnect() }
-        runCatching { commandServer?.closeService() }
-        runCatching { commandServer?.close() }
-        runCatching { vpnFd?.close() }
-        logClient = null
-        logClientStatusIntervalNs = 0L
-        commandServer = null
-        vpnFd = null
-        platform = null
-        startedElapsed = 0L
-        lastIdleRecoverElapsed = 0L
-        lastHandoffWakeElapsed = 0L
-        lastScreenOffElapsed = 0L
+        releaseRuntime()
         notification.cancel()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
@@ -637,6 +831,9 @@ class LayerVpnService : VpnService(), CommandServerHandler {
                             longIdleReload = true,
                         )
                         container.autoServerSelector.onDeviceBecameInteractive()
+                        recheckTunExclusions(
+                            if (intent.action == Intent.ACTION_USER_PRESENT) "user-present" else "screen-on",
+                        )
                     }
                     PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED -> {
                         val idle = getSystemService(PowerManager::class.java).isDeviceIdleMode
@@ -717,6 +914,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
     }
 
     fun openTun(options: TunOptions): Int {
+        if (stopping) error("android: VPN is stopping")
         if (prepare(this) != null) error("android: missing vpn permission")
         val dump = StringBuilder()
         fun note(line: String) {
@@ -726,9 +924,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         val builder = Builder()
             .setSession("Layer")
             .setMtu(options.mtu)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            builder.setMetered(false)
-        }
+            .setMetered(false)
         note(
             "[TUN] mtu=${options.mtu} autoRoute=${options.autoRoute} " +
                 "strict=${options.strictRoute} dnsMode=${options.dnsMode?.value}",
@@ -743,6 +939,8 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             builder.addAddress(address, prefix)
             note("[TUN] address6 $address/$prefix")
         }
+        var appliedExcludeMode = false
+        var appliedExcludePackages = emptyList<String>()
         if (options.autoRoute) {
             val dnsServers = mutableListOf<String>()
             val dnsResult = runCatching {
@@ -759,55 +957,58 @@ class LayerVpnService : VpnService(), CommandServerHandler {
                 builder.addDnsServer(server)
                 note("[TUN] dns $server")
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                val inet4Routes = drainPrefixes(options.inet4RouteAddress)
-                if (inet4Routes.isNotEmpty()) {
-                    inet4Routes.forEach { (address, prefix) ->
-                        builder.addRoute(address, prefix)
-                        note("[TUN] route $address/$prefix")
-                    }
-                } else {
-                    builder.addRoute("0.0.0.0", 0)
-                    note("[TUN] route 0.0.0.0/0 fallback reason=inet4RouteAddress-empty")
-                }
-                val inet6Routes = drainPrefixes(options.inet6RouteAddress)
-                if (inet6Routes.isNotEmpty()) {
-                    inet6Routes.forEach { (address, prefix) ->
-                        builder.addRoute(address, prefix)
-                        note("[TUN] route6 $address/$prefix")
-                    }
-                } else if (inet6.isNotEmpty()) {
-                    builder.addRoute("::", 0)
-                    note("[TUN] route ::/0")
-                }
-                drainPrefixes(options.inet4RouteExcludeAddress).forEach { (address, prefix) ->
-                    builder.excludeRoute(IpPrefix(InetAddress.getByName(address), prefix))
-                    note("[TUN] exclude $address/$prefix")
-                }
-                drainPrefixes(options.inet6RouteExcludeAddress).forEach { (address, prefix) ->
-                    builder.excludeRoute(IpPrefix(InetAddress.getByName(address), prefix))
-                    note("[TUN] exclude6 $address/$prefix")
+            val inet4Routes = drainPrefixes(options.inet4RouteAddress)
+            if (inet4Routes.isNotEmpty()) {
+                inet4Routes.forEach { (address, prefix) ->
+                    builder.addRoute(address, prefix)
+                    note("[TUN] route $address/$prefix")
                 }
             } else {
-                drainPrefixes(options.inet4RouteRange).forEach { (address, prefix) ->
+                builder.addRoute("0.0.0.0", 0)
+                note("[TUN] route 0.0.0.0/0 fallback reason=inet4RouteAddress-empty")
+            }
+            val inet6Routes = drainPrefixes(options.inet6RouteAddress)
+            if (inet6Routes.isNotEmpty()) {
+                inet6Routes.forEach { (address, prefix) ->
                     builder.addRoute(address, prefix)
-                    note("[TUN] range $address/$prefix")
+                    note("[TUN] route6 $address/$prefix")
                 }
-                drainPrefixes(options.inet6RouteRange).forEach { (address, prefix) ->
-                    builder.addRoute(address, prefix)
-                    note("[TUN] range6 $address/$prefix")
-                }
+            } else if (inet6.isNotEmpty()) {
+                builder.addRoute("::", 0)
+                note("[TUN] route ::/0")
+            }
+            drainPrefixes(options.inet4RouteExcludeAddress).forEach { (address, prefix) ->
+                builder.excludeRoute(IpPrefix(InetAddress.getByName(address), prefix))
+                note("[TUN] exclude $address/$prefix")
+            }
+            drainPrefixes(options.inet6RouteExcludeAddress).forEach { (address, prefix) ->
+                builder.excludeRoute(IpPrefix(InetAddress.getByName(address), prefix))
+                note("[TUN] exclude6 $address/$prefix")
             }
             drainStrings(options.includePackage).forEach { pkg ->
                 runCatching { builder.addAllowedApplication(pkg) }
                     .onSuccess { note("[TUN] allow $pkg") }
                     .onFailure { note("[TUN] allow $pkg failed: ${it.message}") }
             }
-            drainStrings(options.excludePackage).forEach { pkg ->
+            val skipDirectExclude = lockdownEnabled()
+            val excludeList = drainStrings(options.excludePackage)
+            // Only packages the builder accepted count as applied, so a failed
+            // disallow is retried by the next recheck instead of looking done.
+            val applied = mutableListOf<String>()
+            excludeList.forEach { pkg ->
+                if (skipDirectExclude) {
+                    note("[TUN] disallow $pkg skipped reason=lockdown")
+                    return@forEach
+                }
                 runCatching { builder.addDisallowedApplication(pkg) }
-                    .onSuccess { note("[TUN] disallow $pkg") }
+                    .onSuccess {
+                        applied += pkg
+                        note("[TUN] disallow $pkg")
+                    }
                     .onFailure { note("[TUN] disallow $pkg failed: ${it.message}") }
             }
+            appliedExcludeMode = !skipDirectExclude
+            appliedExcludePackages = applied.toList()
         }
         runCatching { builder.addDisallowedApplication(packageName) }
             .onSuccess { note("[TUN] disallow self $packageName") }
@@ -821,8 +1022,24 @@ class LayerVpnService : VpnService(), CommandServerHandler {
                 .onSuccess { note("[TUN] closed previous") }
                 .onFailure { note("[TUN] previous close: ${it.message}") }
         }
+        if (stopping) error("android: VPN is stopping")
         val pfd = builder.establish() ?: error("android: the application is not prepared or is revoked")
-        vpnFd = pfd
+        val accepted = synchronized(runtimeLock) {
+            if (stopping) {
+                false
+            } else {
+                vpnFd = pfd
+                if (options.autoRoute) {
+                    lastExcludeDirectFromTun = appliedExcludeMode
+                    lastAppliedExcludePackages = appliedExcludePackages
+                }
+                true
+            }
+        }
+        if (!accepted) {
+            runCatching { pfd.close() }
+            error("android: VPN stopped while establishing TUN")
+        }
         note("[TUN] establish ok fd=${pfd.fd}")
         container.diagnostics.lastTunDump = dump.toString().trim()
         return pfd.fd
@@ -889,16 +1106,16 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             running?.recoverAfterHandoff(reason)
         }
 
+        fun recheckLockdown() {
+            running?.recheckTunExclusions("app-resume")
+        }
+
         fun start(context: Context, serverName: String = "") {
             val intent = Intent(context, LayerVpnService::class.java).setAction(ACTION_START)
             if (serverName.isNotBlank()) {
                 intent.putExtra(EXTRA_SERVER_NAME, serverName)
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            context.startForegroundService(intent)
         }
 
         fun stop(context: Context) {
@@ -907,11 +1124,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
 
         fun reload(context: Context) {
             val intent = Intent(context, LayerVpnService::class.java).setAction(ACTION_RELOAD)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            context.startForegroundService(intent)
         }
 
         fun stopIntent(context: Context): Intent {

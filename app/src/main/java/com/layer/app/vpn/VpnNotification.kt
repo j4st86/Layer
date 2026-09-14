@@ -7,7 +7,6 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.pm.ServiceInfo
-import android.os.Build
 import androidx.core.app.NotificationCompat
 import com.layer.app.MainActivity
 import com.layer.app.R
@@ -59,15 +58,11 @@ class VpnNotification(private val service: Service) {
     fun startForeground(state: VpnConnectionState, serverName: String? = null) {
         ensureChannel()
         val notification = build(state, serverName)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            service.startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED,
-            )
-        } else {
-            service.startForeground(NOTIFICATION_ID, notification)
-        }
+        service.startForeground(
+            NOTIFICATION_ID,
+            notification,
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED,
+        )
     }
 
     fun update(state: VpnConnectionState, serverName: String? = null) {
@@ -85,18 +80,16 @@ class VpnNotification(private val service: Service) {
         const val NOTIFICATION_ID = 1
 
         fun ensureChannel(context: Context) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val channel = NotificationChannel(
-                    CHANNEL_ID,
-                    context.getString(R.string.app_name),
-                    NotificationManager.IMPORTANCE_LOW,
-                ).apply {
-                    description = context.getString(R.string.vpn_channel_description)
-                    setShowBadge(false)
-                }
-                context.getSystemService(NotificationManager::class.java)
-                    .createNotificationChannel(channel)
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                context.getString(R.string.app_name),
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = context.getString(R.string.vpn_channel_description)
+                setShowBadge(false)
             }
+            context.getSystemService(NotificationManager::class.java)
+                .createNotificationChannel(channel)
         }
     }
 }

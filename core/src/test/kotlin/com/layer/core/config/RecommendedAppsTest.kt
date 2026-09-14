@@ -2,6 +2,7 @@ package com.layer.core.config
 
 import com.layer.core.model.AppRoutingMode
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -54,5 +55,21 @@ class RecommendedAppsTest {
         assertEquals(AppRoutingMode.DIRECT, rules.first { it.packageName == "ru.ozon.app.android" }.mode)
         assertEquals(AppRoutingMode.DIRECT, rules.first { it.packageName == "com.vkontakte.android" }.mode)
         assertEquals(AppRoutingMode.VPN, rules.first { it.packageName == "org.telegram.messenger" }.mode)
+    }
+
+    @Test
+    fun geminiIsNotUserConfigurableOrRecommended() {
+        assertTrue(
+            RecommendedApps.rulesToAdd(
+                mapOf(FixedAppRoutingPolicy.GEMINI_PACKAGE to "Gemini"),
+                emptySet(),
+            ).isEmpty(),
+        )
+        assertTrue(
+            RecommendedApps.catalog.none {
+                FixedAppRoutingPolicy.GEMINI_PACKAGE in it.packageNames
+            },
+        )
+        assertFalse(FixedAppRoutingPolicy.isUserConfigurable(FixedAppRoutingPolicy.GEMINI_PACKAGE))
     }
 }
