@@ -14,4 +14,14 @@ object PushDirectPackages {
         "com.google.android.gms",
         "com.google.android.gsf",
     )
+
+    /**
+     * Play Services also runs the Gemini eligibility check. While these were
+     * excluded from TUN their DNS never reached sing-box, so the AI names came
+     * back from the phone's resolver and Google answered the Russian address:
+     * Gemini reported an unsupported region and vanished from the app list.
+     * They stay DIRECT but inside TUN so [FixedAppRoutingPolicy] can point the
+     * AI names at its own DoT. FCM still never touches VLESS.
+     */
+    val keepInTun: Set<String> = packages.toSet()
 }

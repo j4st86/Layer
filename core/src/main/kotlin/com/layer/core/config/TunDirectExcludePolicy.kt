@@ -10,6 +10,9 @@ package com.layer.core.config
  * excluded apps, so the Android side must pass [excludeDirectFromTun]=false
  * and skip addDisallowedApplication when lockdown is on.
  *
+ * [PushDirectPackages.keepInTun] is the exception: those UIDs are routed
+ * DIRECT but never excluded, because sing-box has to answer their DNS.
+ *
  * Exclusion and app DIRECT are per UID, not per package. sing-box sees every
  * package on a UID. If a SMART or VPN app shares that UID, putting the
  * DIRECT sibling in the app DIRECT rule would send the whole UID DIRECT.
@@ -100,7 +103,10 @@ object TunDirectExcludePolicy {
                 continue
             }
             if (pkg in userDirect) routeDirect += pkg
-            if (excludeDirectFromTun) excluded.addAll(uidPackages)
+            // Play Services must see sing-box DNS, so the whole UID stays on
+            // the VPN fd even though its traffic is routed DIRECT.
+            val keepsDns = uidPackages.any { it in PushDirectPackages.keepInTun }
+            if (excludeDirectFromTun && !keepsDns) excluded.addAll(uidPackages)
         }
 
         return Decision(

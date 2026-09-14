@@ -288,7 +288,7 @@ class SingBoxConfigGeneratorTest {
         ).json
         val root = Json.parseToJsonElement(json).jsonObject
         val tun = root["inbounds"]!!.jsonArray.first().jsonObject
-        val excluded = tun["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content }
+        val excluded = excludedPackages(tun)
         assertFalse(excluded.contains(FixedAppRoutingPolicy.GEMINI_PACKAGE))
 
         assertTrue(routePackageNames(json, "direct").contains(FixedAppRoutingPolicy.GEMINI_PACKAGE))
@@ -315,30 +315,57 @@ class SingBoxConfigGeneratorTest {
     }
 
     @Test
-    fun geminiQuicIsRejectedBeforeItsDirectRule() {
+    fun aiNamesUseTheRelayForEveryAppAndNeverClimbIntoVless() {
         val json = SingBoxConfigGenerator.generate(
             uuid = sampleUuid,
-            settings = sampleSettings,
-            appRules = emptyList(),
+            settings = sampleSettings.copy(automaticRuleSetEnabled = true),
+            appRules = listOf(
+                AppRoutingRule("com.google.android.gms", "Play Services", AppRoutingMode.VPN),
+                AppRoutingRule("com.android.chrome", "Chrome", AppRoutingMode.VPN),
+            ),
             domainRules = emptyList(),
             ownPackageName = "com.layer.app",
+            excludeDirectFromTun = true,
         ).json
-        val rules = Json.parseToJsonElement(json).jsonObject["route"]!!.jsonObject["rules"]!!.jsonArray
-        fun indexOfGemini(predicate: (JsonObject) -> Boolean): Int = rules.indexOfFirst { rule ->
-            val obj = rule.jsonObject
-            obj["package_name"]?.toString().orEmpty()
-                .contains(FixedAppRoutingPolicy.GEMINI_PACKAGE) && predicate(obj)
+        val root = Json.parseToJsonElement(json).jsonObject
+        val sample = "gemini.google"
+        assertTrue(FixedAppRoutingPolicy.AI_DOMAIN_SUFFIXES.contains(sample))
+
+        // The eligibility check runs in Play Services, so the AI names must be
+        // matched by domain ahead of every package rule.
+        val dnsRules = root["dns"]!!.jsonObject["rules"]!!.jsonArray
+        val aiDns = dnsRules.indexOfFirst { rule ->
+            rule.jsonObject["domain_suffix"]?.toString().orEmpty().contains(sample)
         }
-        val quicReject = indexOfGemini { obj ->
+        val gmsDns = dnsRules.indexOfFirst { rule ->
+            rule.jsonObject["package_name"]?.toString().orEmpty().contains("com.google.android.gms")
+        }
+        assertTrue(aiDns >= 0)
+        assertTrue(gmsDns > aiDns)
+        assertEquals(
+            FixedAppRoutingPolicy.GEMINI_DNS_TAG,
+            dnsRules[aiDns].jsonObject["server"]!!.jsonPrimitive.content,
+        )
+
+        val routeRules = root["route"]!!.jsonObject["rules"]!!.jsonArray
+        fun indexOfAi(predicate: (JsonObject) -> Boolean): Int = routeRules.indexOfFirst { rule ->
+            val obj = rule.jsonObject
+            obj["domain_suffix"]?.toString().orEmpty().contains(sample) && predicate(obj)
+        }
+        val quicReject = indexOfAi { obj ->
             obj["protocol"]?.jsonPrimitive?.content == "quic" &&
                 obj["action"]?.jsonPrimitive?.content == "reject"
         }
-        val direct = indexOfGemini { obj ->
-            obj["outbound"]?.jsonPrimitive?.content == "direct"
+        val aiDirect = indexOfAi { obj -> obj["outbound"]?.jsonPrimitive?.content == "direct" }
+        val chromeProxy = routeRules.indexOfFirst { rule ->
+            val obj = rule.jsonObject
+            obj["package_name"]?.toString().orEmpty().contains("com.android.chrome") &&
+                obj["outbound"]?.jsonPrimitive?.content == "proxy"
         }
         assertTrue(quicReject >= 0)
-        assertTrue(direct >= 0)
-        assertTrue(quicReject < direct)
+        assertTrue(aiDirect > quicReject)
+        assertTrue(chromeProxy > aiDirect)
+        assertFalse(json.contains("rs-google-ai"))
     }
 
     @Test
@@ -586,14 +613,11 @@ class SingBoxConfigGeneratorTest {
         ).json
         val tun = Json.parseToJsonElement(json).jsonObject["inbounds"]!!.jsonArray.first().jsonObject
         val excluded = tun["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content }
-        assertEquals(
-            listOf(
-                "com.google.android.gms",
-                "com.google.android.gsf",
-                "ru.bank.app",
-            ),
-            excluded,
-        )
+        assertEquals(listOf("ru.bank.app"), excluded)
+        // Play Services route DIRECT but stay on the VPN fd so sing-box can
+        // answer their DNS with the AI relay.
+        assertFalse(excluded.contains("com.google.android.gms"))
+        assertFalse(excluded.contains("com.google.android.gsf"))
         assertFalse(excluded.contains("com.google.android.youtube"))
         assertFalse(excluded.contains("org.telegram.messenger"))
         assertFalse(excluded.contains("com.android.chrome"))
@@ -641,13 +665,7 @@ class SingBoxConfigGeneratorTest {
             },
         ).json
         val tun = Json.parseToJsonElement(json).jsonObject["inbounds"]!!.jsonArray.first().jsonObject
-        val excluded = tun["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content }
-        assertEquals(
-            listOf("com.google.android.gms", "com.google.android.gsf"),
-            excluded,
-        )
-        assertFalse(excluded.contains("ru.bank.app"))
-        assertFalse(excluded.contains("com.android.chrome"))
+        assertFalse(tun.containsKey("exclude_package"))
         assertFalse(routePackageNames(json, "direct").contains("ru.bank.app"))
         val automaticProxy = Json.parseToJsonElement(json).jsonObject["route"]!!.jsonObject["rules"]!!.jsonArray
             .indexOfFirst { rule ->
@@ -672,7 +690,7 @@ class SingBoxConfigGeneratorTest {
             packagesSharingUid = { pkg -> if (pkg == "ru.missing.app") null else listOf(pkg) },
         ).json
         val tun = Json.parseToJsonElement(json).jsonObject["inbounds"]!!.jsonArray.first().jsonObject
-        val excluded = tun["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content }
+        val excluded = excludedPackages(tun)
         assertFalse(excluded.contains("ru.missing.app"))
         assertFalse(routePackageNames(json, "direct").contains("ru.missing.app"))
     }
@@ -698,7 +716,7 @@ class SingBoxConfigGeneratorTest {
             },
         ).json
         val tun = Json.parseToJsonElement(json).jsonObject["inbounds"]!!.jsonArray.first().jsonObject
-        val excluded = tun["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content }
+        val excluded = excludedPackages(tun)
         assertFalse(excluded.contains("com.termux"))
         assertFalse(excluded.contains("com.termux.styling"))
         assertFalse(routePackageNames(json, "direct").contains("com.termux"))
@@ -770,6 +788,9 @@ class SingBoxConfigGeneratorTest {
         assertTrue(automaticProxy > appDirect)
         assertEquals("direct", root["route"]!!.jsonObject["final"]!!.jsonPrimitive.content)
     }
+
+    private fun excludedPackages(tun: JsonObject): List<String> =
+        tun["exclude_package"]?.jsonArray?.map { it.jsonPrimitive.content }.orEmpty()
 
     private fun routePackageNames(json: String, outbound: String): List<String> {
         val rules = Json.parseToJsonElement(json).jsonObject["route"]!!.jsonObject["rules"]!!.jsonArray

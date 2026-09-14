@@ -29,13 +29,13 @@ class TunDirectExcludePolicyTest {
         )
         assertEquals(
             listOf(
-                "com.google.android.gms",
-                "com.google.android.gsf",
                 "ru.ozon.app.android",
                 "ru.sberbankmobile",
             ),
             packages,
         )
+        assertFalse(packages.contains("com.google.android.gms"))
+        assertFalse(packages.contains("com.google.android.gsf"))
         assertFalse(packages.contains("org.telegram.messenger"))
         assertFalse(packages.contains("com.google.android.youtube"))
         assertFalse(packages.contains("com.android.vending"))
@@ -43,20 +43,21 @@ class TunDirectExcludePolicyTest {
     }
 
     @Test
-    fun stillExcludesGmsIfUserMarkedItVpn() {
-        val packages = TunDirectExcludePolicy.packages(
+    fun playServicesStayInTunEvenIfUserMarkedThemVpn() {
+        val decision = TunDirectExcludePolicy.decide(
             excludeDirectFromTun = true,
             directApps = emptyList(),
             vpnApps = listOf("com.google.android.gms"),
         )
-        assertTrue(packages.contains("com.google.android.gms"))
-        assertTrue(packages.contains("com.google.android.gsf"))
+        assertFalse(decision.packages.contains("com.google.android.gms"))
+        assertFalse(decision.packages.contains("com.google.android.gsf"))
+        assertTrue(decision.skipped.isEmpty())
     }
 
     @Test
     fun dropsBlankAndDeduplicates() {
         assertEquals(
-            listOf("com.google.android.gms", "com.google.android.gsf", "ru.ozon.app.android"),
+            listOf("ru.ozon.app.android"),
             TunDirectExcludePolicy.packages(
                 excludeDirectFromTun = true,
                 directApps = listOf("", "ru.ozon.app.android", "com.google.android.gms"),
@@ -78,10 +79,7 @@ class TunDirectExcludePolicyTest {
                 }
             },
         )
-        assertEquals(
-            listOf("com.google.android.gms", "com.google.android.gsf"),
-            decision.packages,
-        )
+        assertEquals(emptyList<String>(), decision.packages)
         assertTrue(
             decision.skipped.any {
                 it.packageName == "ru.bank.app" &&
@@ -120,19 +118,35 @@ class TunDirectExcludePolicyTest {
     fun excludesWholeUidWhenEveryPackageIsBypass() {
         val packages = TunDirectExcludePolicy.packages(
             excludeDirectFromTun = true,
-            directApps = emptyList(),
+            directApps = listOf("com.bank.main", "com.bank.plugin"),
             packagesSharingUid = { pkg ->
                 when (pkg) {
-                    "com.google.android.gms", "com.google.android.gsf" ->
-                        listOf("com.google.android.gms", "com.google.android.gsf")
+                    "com.bank.main", "com.bank.plugin" ->
+                        listOf("com.bank.main", "com.bank.plugin")
                     else -> listOf(pkg)
                 }
             },
         )
         assertEquals(
-            listOf("com.google.android.gms", "com.google.android.gsf"),
+            listOf("com.bank.main", "com.bank.plugin"),
             packages,
         )
+    }
+
+    @Test
+    fun keepsWholeUidInTunWhenPlayServicesShareIt() {
+        val packages = TunDirectExcludePolicy.packages(
+            excludeDirectFromTun = true,
+            directApps = listOf("com.google.android.gsf.login"),
+            packagesSharingUid = { pkg ->
+                when (pkg) {
+                    "com.google.android.gsf.login", "com.google.android.gsf" ->
+                        listOf("com.google.android.gsf.login", "com.google.android.gsf")
+                    else -> listOf(pkg)
+                }
+            },
+        )
+        assertEquals(emptyList<String>(), packages)
     }
 
     @Test

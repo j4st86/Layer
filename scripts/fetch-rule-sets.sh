@@ -30,7 +30,6 @@ meta.srs|rs-meta.srs
 twitter.srs|rs-twitter.srs
 telegram.srs|rs-telegram.srs
 discord.srs|rs-discord.srs
-google_ai.srs|rs-google-ai.srs
 tiktok.srs|rs-tiktok.srs
 news.srs|rs-news.srs
 hdrezka.srs|rs-hdrezka.srs

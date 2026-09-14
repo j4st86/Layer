@@ -29,7 +29,6 @@ object RuleSetCatalog {
             AutomaticRuleSet("rs-twitter", "X / Twitter", "$BASE/twitter.srs"),
             AutomaticRuleSet("rs-telegram", "Telegram", "$BASE/telegram.srs"),
             AutomaticRuleSet("rs-discord", "Discord", "$BASE/discord.srs"),
-            AutomaticRuleSet("rs-google-ai", "Google AI", "$BASE/google_ai.srs"),
             AutomaticRuleSet("rs-tiktok", "TikTok", "$BASE/tiktok.srs"),
             AutomaticRuleSet("rs-news", copy("Foreign media", "Зарубежные СМИ"), "$BASE/news.srs"),
             AutomaticRuleSet("rs-hdrezka", "HDRezka", "$BASE/hdrezka.srs"),

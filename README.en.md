@@ -50,7 +50,7 @@ direct
 ## Features
 
 - Native client: Kotlin, Jetpack Compose, Android `VpnService`, [sing-box](https://github.com/SagerNet/sing-box) (libbox)
-- Automatic lists: YouTube, Telegram, Instagram / Facebook, X, Discord, TikTok, Google AI, Google Play, Cloudflare, foreign media, HDRezka, geoblock
+- Automatic lists: YouTube, Telegram, Instagram / Facebook, X, Discord, TikTok, Google Play, Cloudflare, foreign media, HDRezka, geoblock
 - Optional DNS-level blocking of ads and trackers
 - App rules: send all of an app’s traffic through the VPN, or always bypass it
 - Custom domains, including zones like `.рф`

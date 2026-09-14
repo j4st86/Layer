@@ -244,6 +244,16 @@ object SingBoxConfigGenerator {
                 put("action", "route")
                 put("server", "dns-local")
             })
+            // By domain, not by package: the Gemini eligibility check runs in
+            // Play Services and in the Google app, so a package rule left them
+            // on the OS resolver and Google answered the Russian address.
+            add(buildJsonObject {
+                putJsonArray("domain_suffix") {
+                    FixedAppRoutingPolicy.AI_DOMAIN_SUFFIXES.forEach { add(it) }
+                }
+                put("action", "route")
+                put("server", FixedAppRoutingPolicy.GEMINI_DNS_TAG)
+            })
             add(buildJsonObject {
                 putJsonArray("package_name") { add(FixedAppRoutingPolicy.GEMINI_PACKAGE) }
                 put("action", "route")
@@ -507,15 +517,24 @@ object SingBoxConfigGenerator {
                     put("outbound", "direct")
                 })
             }
-            // dns-gemini answers with an SNI relay that only serves TCP:443;
-            // its own HTTPS record offers h2 and no h3. Cronet still retries a
-            // cached h3 alt-svc, UDP:443 on the relay is a black hole with no
-            // ICMP, and the chat spins on "wait" forever. Reject QUIC so the
-            // app falls back to TCP. Must precede the DIRECT rule below.
+            // The relay behind dns-gemini only serves TCP:443 and its own HTTPS
+            // record offers h2 without h3. Cronet still retries a cached h3
+            // alt-svc into a silent UDP:443, so the chat spins on "wait".
+            // Scoped to the AI names: the rest of Gemini's QUIC is untouched.
             add(buildJsonObject {
                 put("protocol", "quic")
-                putJsonArray("package_name") { add(FixedAppRoutingPolicy.GEMINI_PACKAGE) }
+                putJsonArray("domain_suffix") {
+                    FixedAppRoutingPolicy.AI_DOMAIN_SUFFIXES.forEach { add(it) }
+                }
                 put("action", "reject")
+            })
+            // The relay is what unblocks the region, so these names must not
+            // also climb into VLESS, whatever app rule the UID carries.
+            add(buildJsonObject {
+                putJsonArray("domain_suffix") {
+                    FixedAppRoutingPolicy.AI_DOMAIN_SUFFIXES.forEach { add(it) }
+                }
+                put("outbound", "direct")
             })
             add(buildJsonObject {
                 putJsonArray("package_name") { add(FixedAppRoutingPolicy.GEMINI_PACKAGE) }
