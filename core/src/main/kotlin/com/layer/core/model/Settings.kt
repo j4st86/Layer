@@ -65,6 +65,7 @@ data class LayerSettings(
     val autoSelectServerEnabled: Boolean = false,
     val autoSelectIntervalMinutes: Int = 10,
     val adBlockEnabled: Boolean = false,
+    val verboseBoxLogEnabled: Boolean = false,
 ) {
     fun manualServers(): List<SavedServer> = servers.filter { it.subscriptionId == null }
 

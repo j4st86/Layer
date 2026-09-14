@@ -10,6 +10,7 @@ import com.layer.core.model.VlessServerConfig
 import com.layer.core.i18n.UiLanguage
 import com.layer.core.i18n.UiLanguageState
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -311,6 +312,33 @@ class SingBoxConfigGeneratorTest {
             FixedAppRoutingPolicy.GEMINI_DNS_TAG,
             geminiRule["server"]!!.jsonPrimitive.content,
         )
+    }
+
+    @Test
+    fun geminiQuicIsRejectedBeforeItsDirectRule() {
+        val json = SingBoxConfigGenerator.generate(
+            uuid = sampleUuid,
+            settings = sampleSettings,
+            appRules = emptyList(),
+            domainRules = emptyList(),
+            ownPackageName = "com.layer.app",
+        ).json
+        val rules = Json.parseToJsonElement(json).jsonObject["route"]!!.jsonObject["rules"]!!.jsonArray
+        fun indexOfGemini(predicate: (JsonObject) -> Boolean): Int = rules.indexOfFirst { rule ->
+            val obj = rule.jsonObject
+            obj["package_name"]?.toString().orEmpty()
+                .contains(FixedAppRoutingPolicy.GEMINI_PACKAGE) && predicate(obj)
+        }
+        val quicReject = indexOfGemini { obj ->
+            obj["protocol"]?.jsonPrimitive?.content == "quic" &&
+                obj["action"]?.jsonPrimitive?.content == "reject"
+        }
+        val direct = indexOfGemini { obj ->
+            obj["outbound"]?.jsonPrimitive?.content == "direct"
+        }
+        assertTrue(quicReject >= 0)
+        assertTrue(direct >= 0)
+        assertTrue(quicReject < direct)
     }
 
     @Test

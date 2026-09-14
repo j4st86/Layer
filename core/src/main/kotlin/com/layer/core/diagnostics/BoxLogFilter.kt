@@ -3,12 +3,18 @@ package com.layer.core.diagnostics
 /**
  * sing-box info logs every outbound during music. That wipes the diagnostic
  * buffer, so overnight [VPN]/[AUTO] history is gone. Keep warn+error only.
+ *
+ * Verbose is an explicit, temporary diagnostics opt-in: it raises sing-box to
+ * info so DNS rule matches and per-connection routing become visible. It costs
+ * battery and overwrites history, so it must never be the default.
  */
 object BoxLogFilter {
-    fun keep(level: String, @Suppress("UNUSED_PARAMETER") text: String): Boolean {
+    fun level(verbose: Boolean): String = if (verbose) "info" else "warn"
+
+    fun keep(level: String, @Suppress("UNUSED_PARAMETER") text: String, verbose: Boolean = false): Boolean {
         return when (level.lowercase()) {
             "panic", "fatal", "error", "warn", "warning" -> true
-            else -> false
+            else -> verbose
         }
     }
 

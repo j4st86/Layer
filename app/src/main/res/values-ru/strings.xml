@@ -179,6 +179,8 @@
     <string name="navi_open_diagnostics">Открыть диагностику</string>
 
     <string name="diagnostics_title">Диагностика</string>
+    <string name="diagnostics_verbose">Подробный лог sing-box</string>
+    <string name="diagnostics_verbose_sub">Уровень info: попадания DNS-правил и маршрут каждого соединения. Тратит батарею и затирает старые события. После отладки выключи.</string>
     <string name="diagnostics_empty_title">Пока нет событий</string>
     <string name="diagnostics_empty_body">События ядра, TUN, DNS и protect. Секреты не пишутся. «Отправить» — полный отчёт для отладки.</string>
     <string name="send_report_chooser">Отправить отчёт</string>

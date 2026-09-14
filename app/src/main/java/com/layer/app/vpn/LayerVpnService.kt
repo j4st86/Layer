@@ -73,6 +73,9 @@ class LayerVpnService : VpnService(), CommandServerHandler {
     private var lastScreenOffElapsed = 0L
     private var idlePokeJob: Job? = null
     private var logClientStatusIntervalNs = 0L
+    @Volatile private var logClientVerbose = false
+    @Volatile private var logClientReplacing = false
+    private var logClientReattachCount = 0
     @Volatile private var lastExcludeDirectFromTun: Boolean? = null
     @Volatile private var lastAppliedExcludePackages: List<String>? = null
 
@@ -233,6 +236,8 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             dbg("[VPN] event=start-or-reload")
             commandServer?.startOrReloadService(generated.json, OverrideOptions())
             if (abortIfStopping("start")) return
+            logClientVerbose = settings.verboseBoxLogEnabled
+            attachLogClient()
             startedElapsed = SystemClock.elapsedRealtime()
             lastIdleRecoverElapsed = startedElapsed
             lastScreenOffElapsed = 0L
@@ -288,6 +293,8 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             if (stopping) return
             commandServer?.startOrReloadService(generated.json, OverrideOptions())
             if (abortIfStopping("reload")) return
+            logClientVerbose = settings.verboseBoxLogEnabled
+            attachLogClient()
             startedElapsed = SystemClock.elapsedRealtime()
             lastIdleRecoverElapsed = startedElapsed
             lastScreenOffElapsed = 0L
@@ -379,7 +386,9 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             iface.close()
             error("android: VPN stopped while starting command server")
         }
-        attachLogClient()
+        // The log client is attached only after startOrReloadService. Before
+        // the instance exists libbox answers "get default log level: invalid
+        // argument" and drops the stream for good.
         return server
     }
 
@@ -394,6 +403,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
 
     private fun attachLogClient(force: Boolean = true) {
         val interval = desiredStatusIntervalNs()
+        val generation = synchronized(runtimeLock) { runtimeGeneration }
         val previous = synchronized(runtimeLock) {
             if (!force && logClient != null && logClientStatusIntervalNs == interval) return
             logClient.also {
@@ -401,13 +411,22 @@ class LayerVpnService : VpnService(), CommandServerHandler {
                 logClientStatusIntervalNs = 0L
             }
         }
+        // Tearing down the old client fires disconnected() on the libbox
+        // thread; that reattach must not fight this one.
+        logClientReplacing = true
         runCatching { previous?.disconnect() }
+        logClientReplacing = false
         val options = CommandClientOptions().apply {
             addCommand(Libbox.CommandLog)
             addCommand(Libbox.CommandStatus)
             statusInterval = interval
         }
-        val client = CommandClient(SingBoxLogBridge(container.diagnostics), options)
+        val bridge = SingBoxLogBridge(
+            diagnostics = container.diagnostics,
+            verbose = logClientVerbose,
+            onStreamLost = { reattachLogClient(generation) },
+        )
+        val client = CommandClient(bridge, options)
         val connected = runCatching { client.connect() }
         if (connected.isFailure) {
             dbg("[BOX] event=log-client action=fail error=${connected.exceptionOrNull()?.message}")
@@ -415,7 +434,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
                 .onFailure { dbg("[BOX] event=log-client action=retry-fail error=${it.message}") }
                 .onSuccess { dbg("[BOX] event=log-client action=retry-ok intervalNs=$interval") }
         } else {
-            dbg("[BOX] event=log-client action=ok intervalNs=$interval")
+            dbg("[BOX] event=log-client action=ok intervalNs=$interval verbose=$logClientVerbose")
         }
         val accepted = synchronized(runtimeLock) {
             if (stopping || commandServer == null) {
@@ -427,8 +446,40 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             }
         }
         if (!accepted) {
+            logClientReplacing = true
             runCatching { client.disconnect() }
+            logClientReplacing = false
             dbg("[BOX] event=log-client action=discard reason=stopping")
+        } else {
+            logClientReattachCount = 0
+        }
+    }
+
+    /**
+     * libbox drops the command socket on any RPC error and never redials, so
+     * a single failure used to cost every sing-box line for the rest of the
+     * session. Bounded so a permanently broken socket cannot spin.
+     */
+    private fun reattachLogClient(generation: Long) {
+        if (logClientReplacing) return
+        scope.launch {
+            delay(LOG_CLIENT_REATTACH_DELAY_MS)
+            lifecycleMutex.withLock {
+                val proceed = synchronized(runtimeLock) {
+                    when {
+                        stopping || commandServer == null -> false
+                        runtimeGeneration != generation -> false
+                        logClientReattachCount >= LOG_CLIENT_REATTACH_MAX -> false
+                        else -> {
+                            logClientReattachCount += 1
+                            true
+                        }
+                    }
+                }
+                if (!proceed) return@withLock
+                dbg("[BOX] event=log-client action=reattach attempt=$logClientReattachCount")
+                attachLogClient()
+            }
         }
     }
 
@@ -480,6 +531,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             RuntimeResources(logClient, commandServer, vpnFd, platform).also {
                 logClient = null
                 logClientStatusIntervalNs = 0L
+                logClientReattachCount = 0
                 commandServer = null
                 vpnFd = null
                 platform = null
@@ -1098,6 +1150,8 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         const val ACTION_RELOAD = "com.layer.app.RELOAD"
         const val ACTION_REWIRE = "com.layer.app.REWIRE"
         const val EXTRA_SERVER_NAME = "com.layer.app.EXTRA_SERVER_NAME"
+        private const val LOG_CLIENT_REATTACH_DELAY_MS = 1_000L
+        private const val LOG_CLIENT_REATTACH_MAX = 3
 
         @Volatile
         private var running: LayerVpnService? = null

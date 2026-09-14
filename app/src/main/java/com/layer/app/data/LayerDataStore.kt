@@ -80,6 +80,7 @@ class LayerDataStore(private val context: Context) {
                 prefs[Keys.AUTO_SELECT_INTERVAL] ?: AutoServerPolicy.defaultIntervalMinutes,
             ),
             adBlockEnabled = prefs[Keys.AD_BLOCK] ?: false,
+            verboseBoxLogEnabled = prefs[Keys.VERBOSE_BOX_LOG] ?: false,
         )
     }
 
@@ -93,6 +94,7 @@ class LayerDataStore(private val context: Context) {
         prefs[Keys.AUTO_SELECT_SERVER] = settings.autoSelectServerEnabled
         prefs[Keys.AUTO_SELECT_INTERVAL] = AutoServerPolicy.clampInterval(settings.autoSelectIntervalMinutes)
         prefs[Keys.AD_BLOCK] = settings.adBlockEnabled
+        prefs[Keys.VERBOSE_BOX_LOG] = settings.verboseBoxLogEnabled
     }
 
     private inline fun <reified T> decodeList(raw: String?): List<T> {
@@ -110,6 +112,7 @@ class LayerDataStore(private val context: Context) {
         val AUTO_SELECT_SERVER = booleanPreferencesKey("auto_select_server")
         val AUTO_SELECT_INTERVAL = intPreferencesKey("auto_select_interval_min")
         val AD_BLOCK = booleanPreferencesKey("ad_block")
+        val VERBOSE_BOX_LOG = booleanPreferencesKey("verbose_box_log")
         val APP_RULES = stringPreferencesKey("app_rules")
         val DOMAIN_RULES = stringPreferencesKey("domain_rules")
     }

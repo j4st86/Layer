@@ -43,6 +43,20 @@ class BoxLogFilterTest {
     }
 
     @Test
+    fun verboseKeepsInfoAndRaisesLevel() {
+        assertEquals("warn", BoxLogFilter.level(verbose = false))
+        assertEquals("info", BoxLogFilter.level(verbose = true))
+        assertTrue(
+            BoxLogFilter.keep(
+                "info",
+                "router: match[1] => route(dns-gemini)",
+                verbose = true,
+            ),
+        )
+        assertFalse(BoxLogFilter.keep("info", "router: match[1] => route(dns-gemini)"))
+    }
+
+    @Test
     fun rateLimiterHidesRepeatsThenFlushes() {
         val limiter = BoxLogRateLimiter(windowMs = 8_000L, burst = 3)
         val fp = BoxLogFilter.fingerprint(

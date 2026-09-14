@@ -15,6 +15,7 @@ import com.layer.core.config.SubscriptionParser
 import com.layer.core.config.VlessLinkParser
 import com.layer.core.config.VpnConnectionInput
 import com.layer.core.config.VpnConnectionParser
+import com.layer.core.diagnostics.BoxLogFilter
 import com.layer.core.i18n.copy
 import com.layer.core.model.AppRoutingRule
 import com.layer.core.model.DomainRoutingRule
@@ -365,7 +366,7 @@ class LayerRepository(
             localRuleSets = localRuleSets,
             remoteRuleSetFallback = remoteRuleSetFallback,
             adBlockRuleSetPath = adBlockRuleSetPath,
-            logLevel = "warn",
+            logLevel = BoxLogFilter.level(snap.settings.verboseBoxLogEnabled),
             excludeDirectFromTun = excludeDirectFromTun,
             packagesSharingUid = ::packagesSharingUid,
         )

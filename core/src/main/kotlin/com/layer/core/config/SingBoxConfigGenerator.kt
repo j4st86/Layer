@@ -507,6 +507,16 @@ object SingBoxConfigGenerator {
                     put("outbound", "direct")
                 })
             }
+            // dns-gemini answers with an SNI relay that only serves TCP:443;
+            // its own HTTPS record offers h2 and no h3. Cronet still retries a
+            // cached h3 alt-svc, UDP:443 on the relay is a black hole with no
+            // ICMP, and the chat spins on "wait" forever. Reject QUIC so the
+            // app falls back to TCP. Must precede the DIRECT rule below.
+            add(buildJsonObject {
+                put("protocol", "quic")
+                putJsonArray("package_name") { add(FixedAppRoutingPolicy.GEMINI_PACKAGE) }
+                put("action", "reject")
+            })
             add(buildJsonObject {
                 putJsonArray("package_name") { add(FixedAppRoutingPolicy.GEMINI_PACKAGE) }
                 put("outbound", "direct")

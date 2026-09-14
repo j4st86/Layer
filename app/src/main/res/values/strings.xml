@@ -175,6 +175,8 @@
     <string name="navi_open_diagnostics">Open diagnostics</string>
 
     <string name="diagnostics_title">Diagnostics</string>
+    <string name="diagnostics_verbose">Verbose sing-box log</string>
+    <string name="diagnostics_verbose_sub">Info level: DNS rule hits and routing for every connection. Costs battery and overwrites older events. Turn it off after debugging.</string>
     <string name="diagnostics_empty_title">No events yet</string>
     <string name="diagnostics_empty_body">Core, TUN, DNS and protect events. Secrets are not written. Send produces a full debug report.</string>
     <string name="send_report_chooser">Send report</string>

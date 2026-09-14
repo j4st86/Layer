@@ -12,14 +12,18 @@ import io.nekohasekai.libbox.OutboundGroupIterator
 import io.nekohasekai.libbox.StatusMessage
 import io.nekohasekai.libbox.StringIterator
 
-class SingBoxLogBridge(private val diagnostics: DiagnosticLog) : CommandClientHandler {
+class SingBoxLogBridge(
+    private val diagnostics: DiagnosticLog,
+    private val verbose: Boolean = false,
+    private val onStreamLost: () -> Unit = {},
+) : CommandClientHandler {
     private var lastStatMs = 0L
     private val rateLimiter = BoxLogRateLimiter()
 
     override fun clearLogs() = Unit
 
     override fun connected() {
-        diagnostics.append("[BOX] event=log-stream action=connected")
+        diagnostics.append("[BOX] event=log-stream action=connected verbose=$verbose")
     }
 
     override fun disconnected(message: String?) {
@@ -27,6 +31,9 @@ class SingBoxLogBridge(private val diagnostics: DiagnosticLog) : CommandClientHa
             "[BOX] event=log-stream action=disconnected" +
                 (message?.let { " error=$it" } ?: ""),
         )
+        // libbox never redials the command socket. Without a reattach the
+        // report has no sing-box lines at all for the rest of the session.
+        onStreamLost()
     }
 
     override fun initializeClashMode(modeList: StringIterator?, currentMode: String?) = Unit
@@ -49,7 +56,7 @@ class SingBoxLogBridge(private val diagnostics: DiagnosticLog) : CommandClientHa
             val text = entry.message?.trim().orEmpty()
             if (text.isBlank()) continue
             val level = levelName(entry.level)
-            if (!BoxLogFilter.keep(level, text)) continue
+            if (!BoxLogFilter.keep(level, text, verbose)) continue
             val fingerprint = BoxLogFilter.fingerprint(level, text)
             when (val decision = rateLimiter.allow(fingerprint, now)) {
                 BoxLogRateLimiter.Decision.Drop -> continue

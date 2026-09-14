@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -35,6 +36,7 @@ import com.layer.app.R
 import com.layer.app.diagnostics.DiagnosticReport
 import com.layer.app.ui.LocalAppContainer
 import com.layer.app.ui.components.EmptyState
+import com.layer.core.model.LayerSettings
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -42,6 +44,7 @@ import kotlinx.coroutines.launch
 fun DiagnosticsScreen(onBack: () -> Unit) {
     val container = LocalAppContainer.current
     val entries by container.diagnostics.entries.collectAsStateWithLifecycle(emptyList())
+    val settings by container.repository.settings.collectAsStateWithLifecycle(LayerSettings())
     val context = LocalContext.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -84,6 +87,30 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            item {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.diagnostics_verbose)) },
+                    supportingContent = { Text(stringResource(R.string.diagnostics_verbose_sub)) },
+                    trailingContent = {
+                        Switch(
+                            checked = settings.verboseBoxLogEnabled,
+                            onCheckedChange = { enabled ->
+                                scope.launch {
+                                    container.diagnostics.append(
+                                        "[BOX] event=verbose-toggle enabled=$enabled",
+                                    )
+                                    container.repository.saveSettings(
+                                        settings.copy(verboseBoxLogEnabled = enabled),
+                                    )
+                                    container.vpnController.reload()
+                                }
+                            },
+                        )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                    modifier = Modifier.clip(MaterialTheme.shapes.large),
+                )
+            }
             if (entries.isEmpty()) {
                 item {
                     EmptyState(
