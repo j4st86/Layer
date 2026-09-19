@@ -61,10 +61,8 @@ object BackgroundKeepAlive {
     }
 
     fun isBackgroundRestricted(context: Context): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            val am = context.getSystemService(ActivityManager::class.java)
-            if (am?.isBackgroundRestricted == true) return true
-        }
+        val am = context.getSystemService(ActivityManager::class.java)
+        if (am?.isBackgroundRestricted == true) return true
         val mode = runAnyInBackgroundMode(context) ?: return false
         return mode == AppOpsManager.MODE_IGNORED || mode == AppOpsManager.MODE_ERRORED
     }
@@ -121,23 +119,13 @@ object BackgroundKeepAlive {
         val mode = runAnyInBackgroundMode(context)
         val stopped = context.applicationInfo.flags and ApplicationInfo.FLAG_STOPPED != 0
         val bucket = runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                context.getSystemService(UsageStatsManager::class.java)?.appStandbyBucket
-            } else {
-                null
-            }
+            context.getSystemService(UsageStatsManager::class.java)?.appStandbyBucket
         }.getOrNull()
         return buildString {
             append("status=${status(context)}")
             append(" ignoreBattery=${isIgnoringBatteryOptimizations(context)}")
             append(" amRestricted=")
-            append(
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    context.getSystemService(ActivityManager::class.java)?.isBackgroundRestricted
-                } else {
-                    "n/a"
-                },
-            )
+            append(context.getSystemService(ActivityManager::class.java)?.isBackgroundRestricted)
             append(" runAnyInBackground=${modeName(mode)}")
             append(" standbyBucket=$bucket")
             append(" forceStopped=$stopped")
@@ -146,23 +134,13 @@ object BackgroundKeepAlive {
     }
 
     private fun runAnyInBackgroundMode(context: Context): Int? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return null
         val appOps = context.getSystemService(AppOpsManager::class.java) ?: return null
         return runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                appOps.unsafeCheckOpNoThrow(
-                    OPSTR_RUN_ANY_IN_BACKGROUND,
-                    Process.myUid(),
-                    context.packageName,
-                )
-            } else {
-                @Suppress("DEPRECATION")
-                appOps.checkOpNoThrow(
-                    OPSTR_RUN_ANY_IN_BACKGROUND,
-                    Process.myUid(),
-                    context.packageName,
-                )
-            }
+            appOps.unsafeCheckOpNoThrow(
+                OPSTR_RUN_ANY_IN_BACKGROUND,
+                Process.myUid(),
+                context.packageName,
+            )
         }.getOrNull()
     }
 

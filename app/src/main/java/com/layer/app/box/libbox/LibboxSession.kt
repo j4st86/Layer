@@ -15,7 +15,7 @@ import io.nekohasekai.libbox.SystemProxyStatus
 
 /**
  * Owns the gomobile CommandServer, log client, platform interface and TUN fd.
- * LayerVpnService talks to this type and never imports libbox classes.
+ * LayerBoxService talks to this type and never imports libbox classes.
  */
 class LibboxSession(
     vpn: VpnService,
