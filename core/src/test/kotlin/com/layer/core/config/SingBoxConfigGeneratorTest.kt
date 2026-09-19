@@ -210,7 +210,8 @@ class SingBoxConfigGeneratorTest {
         assertFalse(dnsDirect.containsKey("detour"))
         val dnsServers = root["dns"]!!.jsonObject["servers"]!!.jsonArray
         assertFalse(dnsServers.any { it.jsonObject["tag"]?.jsonPrimitive?.content == "dns-vpn" })
-        assertTrue(json.contains("\"download_detour\": \"proxy\""))
+        assertTrue(json.contains("\"default_http_client\": \"proxy-http\""))
+        assertTrue(json.contains("\"detour\": \"proxy\""))
     }
 
     @Test
@@ -232,7 +233,8 @@ class SingBoxConfigGeneratorTest {
         assertEquals("dns-direct", vpnDns["server"]!!.jsonPrimitive.content)
         val autoDns = dnsRules.first { it.jsonObject.containsKey("rule_set") }.jsonObject
         assertEquals("dns-direct", autoDns["server"]!!.jsonPrimitive.content)
-        assertFalse(json.contains("\"detour\": \"proxy\""))
+        val dnsServers = root["dns"]!!.jsonObject["servers"]!!.jsonArray
+        assertFalse(dnsServers.any { it.jsonObject.containsKey("detour") })
     }
 
     @Test
@@ -357,7 +359,8 @@ class SingBoxConfigGeneratorTest {
         ruleSets.forEach { item ->
             val obj = item.jsonObject
             assertEquals("remote", obj["type"]!!.jsonPrimitive.content)
-            assertEquals("proxy", obj["download_detour"]!!.jsonPrimitive.content)
+            assertTrue(obj["url"]!!.jsonPrimitive.content.startsWith("https://"))
+            assertFalse(obj.containsKey("download_detour"))
         }
     }
 
@@ -377,7 +380,8 @@ class SingBoxConfigGeneratorTest {
         assertEquals("local", youtube["type"]!!.jsonPrimitive.content)
         assertEquals("/data/rule-sets/rs-youtube.srs", youtube["path"]!!.jsonPrimitive.content)
         assertEquals("remote", meta["type"]!!.jsonPrimitive.content)
-        assertEquals("proxy", meta["download_detour"]!!.jsonPrimitive.content)
+        assertEquals("https://github.com/itdoginfo/allow-domains/releases/latest/download/meta.srs", meta["url"]!!.jsonPrimitive.content)
+        assertTrue(json.contains("\"default_http_client\": \"proxy-http\""))
     }
 
     @Test
@@ -393,6 +397,7 @@ class SingBoxConfigGeneratorTest {
         val ruleSets = Json.parseToJsonElement(json).jsonObject["route"]!!.jsonObject["rule_set"]!!.jsonArray
         assertTrue(ruleSets.isEmpty())
         assertFalse(json.contains("download_detour"))
+        assertFalse(json.contains("http_clients"))
         assertFalse(json.contains("rs-youtube"))
     }
 
@@ -461,5 +466,48 @@ class SingBoxConfigGeneratorTest {
             adBlockRuleSetPath = null,
         ).json
         assertFalse(json.contains("rs-ads"))
+    }
+
+    @Test
+    fun generatedConfigMatchesSingBox1141Schema() {
+        val json = SingBoxConfigGenerator.generate(
+            uuid = sampleUuid,
+            settings = sampleSettings,
+            appRules = listOf(
+                AppRoutingRule("ru.bank.app", "Банк", AppRoutingMode.DIRECT),
+                AppRoutingRule("com.google.android.youtube", "YouTube", AppRoutingMode.VPN),
+            ),
+            domainRules = listOf(
+                DomainRoutingRule("example.ru", DomainRoutingMode.DIRECT),
+                DomainRoutingRule("youtube.com", DomainRoutingMode.VPN),
+            ),
+            ownPackageName = "com.layer.app",
+            resolvedServerIp = "203.0.113.10",
+        ).json
+        assertTrue(json.isNotBlank())
+        val errors = SingBoxSchema.assertValid(json)
+        assertTrue(errors.joinToString("\n"), errors.isEmpty())
+    }
+
+    @Test
+    fun realityConfigMatchesSingBox1141Schema() {
+        val json = SingBoxConfigGenerator.generate(
+            uuid = sampleUuid,
+            settings = LayerSettings(
+                server = VlessServerConfig(
+                    address = "203.0.113.10",
+                    serverName = "www.example.com",
+                    fingerprint = "chrome",
+                    security = "reality",
+                    publicKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                    shortId = "abcd1234efgh",
+                ),
+            ),
+            appRules = emptyList(),
+            domainRules = emptyList(),
+            ownPackageName = "com.layer.app",
+        ).json
+        val errors = SingBoxSchema.assertValid(json)
+        assertTrue(errors.joinToString("\n"), errors.isEmpty())
     }
 }

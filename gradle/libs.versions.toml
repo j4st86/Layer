@@ -12,6 +12,7 @@ securityCrypto = "1.1.0"
 coroutines = "1.11.0"
 serialization = "1.11.0"
 junit = "4.13.2"
+json-schema-validator = "2.0.4"
 material = "1.14.0"
 appcompat = "1.8.0"
 play-services-code-scanner = "16.1.0"
@@ -40,6 +41,7 @@ material = { group = "com.google.android.material", name = "material", version.r
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 play-services-code-scanner = { group = "com.google.android.gms", name = "play-services-code-scanner", version.ref = "play-services-code-scanner" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+json-schema-validator = { group = "com.networknt", name = "json-schema-validator", version.ref = "json-schema-validator" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
