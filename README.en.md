@@ -17,7 +17,7 @@
 <p align="center">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-4C6EF5?style=flat-square" alt="GPL-3.0"></a>
   <a href="https://github.com/j4st86/Layer/releases"><img src="https://img.shields.io/github/v/release/j4st86/Layer?style=flat-square&color=2F9E44" alt="Release"></a>
-  <img src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white" alt="Android 8.0+">
+  <img src="https://img.shields.io/badge/Android-14%2B-3DDC84?style=flat-square&logo=android&logoColor=white" alt="Android 14+">
   <img src="https://img.shields.io/badge/arch-arm64-868E96?style=flat-square" alt="arm64">
 </p>
 
@@ -75,7 +75,7 @@ Keys and subscriptions stay on the phone.
 ./gradlew :core:test :app:assembleRelease
 ```
 
-You need JDK 17, Android SDK 36, Go 1.25+, and NDK 28. The script builds slim sing-box **v1.14.0** (TUN, VLESS, Reality/uTLS, gVisor), without QUIC, WireGuard, Tailscale, or Naive.
+You need JDK 17, Android SDK 36, Go 1.25+, and NDK 28. The script builds slim sing-box **v1.14.1** (TUN, VLESS, Reality/uTLS, gVisor), without QUIC, WireGuard, Tailscale, or Naive. Kernel version and patches live in `sing-box.properties` and `scripts/libbox/patches`.
 
 Release signing reads local `keystore.properties` (see `keystore.properties.example`). The keystore is not in the repo.
 

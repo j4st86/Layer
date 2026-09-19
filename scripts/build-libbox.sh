@@ -1,16 +1,35 @@
 #!/usr/bin/env bash
 # Build a slim official sing-box libbox.aar for Layer.
-# Tags keep TUN + VLESS + Reality/uTLS + gVisor + clash/command IPC.
-# Drops QUIC, WireGuard, Tailscale, Naive, OpenVPN, USBIP.
-# After checkout, patches Reality client version and a stream-one XHTTP client.
+#
+# Patches live in scripts/libbox/patches and are applied onto a clean tag.
+# Commands:
+#   ./scripts/build-libbox.sh           # apply patches and bind the AAR
+#   ./scripts/build-libbox.sh apply     # checkout the tag and apply patches only
+#   ./scripts/build-libbox.sh refresh   # rewrite patches from the current cache tree
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+PROPS="$ROOT/sing-box.properties"
+PATCH_DIR="$ROOT/scripts/libbox/patches"
 DEST="$ROOT/app/libs/libbox.aar"
-VERSION="${SINGBOX_VERSION:-v1.14.0}"
 SRC="${SINGBOX_SRC:-$ROOT/.cache/sing-box}"
-ANDROID_API="${ANDROID_API:-24}"
-BIND_TARGET="${BIND_TARGET:-android/arm64}"
+
+if [[ ! -f "$PROPS" ]]; then
+  echo "missing $PROPS" >&2
+  exit 1
+fi
+
+prop() {
+  local key="$1"
+  awk -F= -v k="$key" '$1==k {print substr($0, index($0,"=")+1); exit}' "$PROPS"
+}
+
+VERSION="${SINGBOX_VERSION:-$(prop singbox.tag)}"
+GOMOBILE_VERSION="${GOMOBILE_VERSION:-$(prop gomobile.version)}"
+TAGS="${LIBBOX_TAGS:-$(prop libbox.tags)}"
+ANDROID_API="${ANDROID_API:-$(prop libbox.androidApi)}"
+BIND_TARGET="${BIND_TARGET:-$(prop libbox.bindTarget)}"
+COMMAND="${1:-build}"
 
 export JAVA_HOME="${JAVA_HOME:-/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home}"
 export ANDROID_HOME="${ANDROID_HOME:-/opt/homebrew/share/android-commandlinetools}"
@@ -30,168 +49,119 @@ fi
 GOPATH="$(go env GOPATH)"
 export PATH="$GOPATH/bin:$PATH"
 
-if [[ ! -x "$GOPATH/bin/gomobile" || ! -x "$GOPATH/bin/gobind" ]]; then
-  echo "Installing sagernet gomobile v0.1.12..."
-  go install github.com/sagernet/gomobile/cmd/gomobile@v0.1.12
-  go install github.com/sagernet/gomobile/cmd/gobind@v0.1.12
-fi
-
-if [[ ! -d "$SRC/.git" ]]; then
-  echo "Cloning sing-box $VERSION..."
+ensure_source() {
   mkdir -p "$(dirname "$SRC")"
-  git clone --depth 1 --branch "$VERSION" https://github.com/SagerNet/sing-box.git "$SRC"
-else
-  git -C "$SRC" fetch --depth 1 origin "refs/tags/$VERSION:refs/tags/$VERSION" 2>/dev/null || true
+  if [[ ! -d "$SRC/.git" ]]; then
+    echo "Cloning sing-box $VERSION..."
+    git clone --depth 1 --branch "$VERSION" https://github.com/SagerNet/sing-box.git "$SRC"
+  else
+    if ! git -C "$SRC" rev-parse --verify --quiet "refs/tags/$VERSION" >/dev/null; then
+      echo "Fetching sing-box $VERSION..."
+      git -C "$SRC" fetch --depth 1 origin "tag" "$VERSION"
+    fi
+  fi
   git -C "$SRC" checkout --force "$VERSION"
-fi
+  git -C "$SRC" reset --hard "$VERSION"
+  git -C "$SRC" clean -fdq
+}
 
-# Xray-core 26.7.11+ defaults Reality minClientVer to 26.3.27. Upstream sing-box
-# still writes 1.8.1 into the session-id, so the server falls back to dest and
-# the client sees "reality verification failed". Happ/v2rayNG work because they
-# report a current Xray version. Report 26.8.1 so Layer passes the gate.
-python3 - "$SRC/common/tls/reality_client.go" <<'PY'
-from pathlib import Path
-import sys
-path = Path(sys.argv[1])
-text = path.read_text()
-old = "\thello.SessionId[0] = 1\n\thello.SessionId[1] = 8\n\thello.SessionId[2] = 1"
-new = "\thello.SessionId[0] = 26\n\thello.SessionId[1] = 8\n\thello.SessionId[2] = 1"
-if new in text:
-    print("Reality client version already 26.8.1")
-elif old in text:
-    path.write_text(text.replace(old, new, 1))
-    print("Patched Reality client version 1.8.1 -> 26.8.1")
-else:
-    raise SystemExit(f"reality_client.go: expected SessionId version bytes not found in {path}")
-PY
+apply_patches() {
+  local patch
+  shopt -s nullglob
+  local patches=("$PATCH_DIR"/*.patch)
+  shopt -u nullglob
+  if [[ ${#patches[@]} -eq 0 ]]; then
+    echo "no patches in $PATCH_DIR" >&2
+    exit 1
+  fi
+  for patch in "${patches[@]}"; do
+    echo "Checking $(basename "$patch")..."
+    if ! git -C "$SRC" apply --check "$patch"; then
+      echo "patch did not apply: $patch" >&2
+      echo "Rebase it with: $0 refresh  (after fixing the tree), or inspect the failed hunk." >&2
+      exit 1
+    fi
+  done
+  for patch in "${patches[@]}"; do
+    echo "Applying $(basename "$patch")..."
+    git -C "$SRC" apply "$patch"
+  done
+}
 
-python3 - "$SRC" "$ROOT/scripts/libbox-xhttp" <<'PY'
-from pathlib import Path
-import shutil
-import sys
+refresh_patches() {
+  if [[ ! -d "$SRC/.git" ]]; then
+    echo "no sing-box checkout at $SRC; run $0 apply first" >&2
+    exit 1
+  fi
+  mkdir -p "$PATCH_DIR"
+  git -C "$SRC" add -A
+  git -C "$SRC" diff --cached -- common/tls/reality_client.go > "$PATCH_DIR/0001-reality-client-version-26.8.1.patch"
+  git -C "$SRC" diff --cached -- \
+    constant/v2ray.go \
+    option/v2ray_transport.go \
+    option/v2ray_xhttp.go \
+    transport/v2ray/transport.go \
+    transport/v2rayxhttp/client.go \
+    > "$PATCH_DIR/0002-xhttp-client.patch"
+  echo "Rewrote patches in $PATCH_DIR from $SRC"
+}
 
-src = Path(sys.argv[1])
-bundle = Path(sys.argv[2])
+bind_aar() {
+  if [[ ! -x "$GOPATH/bin/gomobile" || ! -x "$GOPATH/bin/gobind" ]]; then
+    echo "Installing sagernet gomobile $GOMOBILE_VERSION..."
+  else
+    echo "Ensuring sagernet gomobile $GOMOBILE_VERSION..."
+  fi
+  go install "github.com/sagernet/gomobile/cmd/gomobile@$GOMOBILE_VERSION"
+  go install "github.com/sagernet/gomobile/cmd/gobind@$GOMOBILE_VERSION"
+  gomobile init >/dev/null 2>&1 || gomobile init
 
-const_path = src / "constant" / "v2ray.go"
-const_text = const_path.read_text()
-if "V2RayTransportTypeXHTTP" not in const_text:
-    needle = '\tV2RayTransportTypeHTTPUpgrade = "httpupgrade"\n'
-    insert = needle + '\tV2RayTransportTypeXHTTP       = "xhttp"\n'
-    if needle not in const_text:
-        raise SystemExit(f"constant/v2ray.go: HTTPUpgrade const not found")
-    const_path.write_text(const_text.replace(needle, insert, 1))
-    print("Patched constant/v2ray.go with xhttp")
-else:
-    print("constant/v2ray.go already has xhttp")
+  local display="${VERSION#v}-layer"
+  local ldflags="-s -w -buildid= -checklinkname=0 -X github.com/sagernet/sing-box/constant.Version=${display} -X internal/godebug.defaultGODEBUG=multipathtcp=0"
 
-opt_path = src / "option" / "v2ray_transport.go"
-opt_text = opt_path.read_text()
-if "XHTTPOptions" not in opt_text:
-    opt_text = opt_text.replace(
-        'enum:"http,ws,quic,grpc,httpupgrade"',
-        'enum:"http,ws,quic,grpc,httpupgrade,xhttp"',
-        1,
-    )
-    opt_text = opt_text.replace(
-        "\tHTTPUpgradeOptions V2RayHTTPUpgradeOptions `json:\"-\"`\n}",
-        "\tHTTPUpgradeOptions V2RayHTTPUpgradeOptions `json:\"-\"`\n"
-        "\tXHTTPOptions       V2RayXHTTPOptions       `json:\"-\"`\n}",
-        1,
-    )
-    marshal_case = """	case C.V2RayTransportTypeHTTPUpgrade:
-		v = o.HTTPUpgradeOptions
-	case "":
-"""
-    marshal_new = """	case C.V2RayTransportTypeHTTPUpgrade:
-		v = o.HTTPUpgradeOptions
-	case C.V2RayTransportTypeXHTTP:
-		v = o.XHTTPOptions
-	case "":
-"""
-    if marshal_case not in opt_text:
-        raise SystemExit("option/v2ray_transport.go: marshal HTTPUpgrade case not found")
-    opt_text = opt_text.replace(marshal_case, marshal_new, 1)
-    unmarshal_case = """	case C.V2RayTransportTypeHTTPUpgrade:
-		v = &o.HTTPUpgradeOptions
-	default:
-"""
-    unmarshal_new = """	case C.V2RayTransportTypeHTTPUpgrade:
-		v = &o.HTTPUpgradeOptions
-	case C.V2RayTransportTypeXHTTP:
-		v = &o.XHTTPOptions
-	default:
-"""
-    if unmarshal_case not in opt_text:
-        raise SystemExit("option/v2ray_transport.go: unmarshal HTTPUpgrade case not found")
-    opt_text = opt_text.replace(unmarshal_case, unmarshal_new, 1)
-    opt_path.write_text(opt_text)
-    print("Patched option/v2ray_transport.go with xhttp")
-else:
-    print("option/v2ray_transport.go already has xhttp")
+  mkdir -p "$(dirname "$DEST")"
+  rm -f "$DEST"
 
-tr_path = src / "transport" / "v2ray" / "transport.go"
-tr_text = tr_path.read_text()
-if "v2rayxhttp" not in tr_text:
-    tr_text = tr_text.replace(
-        '\t"github.com/sagernet/sing-box/transport/v2rayhttpupgrade"\n',
-        '\t"github.com/sagernet/sing-box/transport/v2rayhttpupgrade"\n'
-        '\t"github.com/sagernet/sing-box/transport/v2rayxhttp"\n',
-        1,
-    )
-    client_case = """	case C.V2RayTransportTypeHTTPUpgrade:
-		return v2rayhttpupgrade.NewClient(ctx, dialer, serverAddr, options.HTTPUpgradeOptions, tlsConfig)
-	default:
-"""
-    client_new = """	case C.V2RayTransportTypeHTTPUpgrade:
-		return v2rayhttpupgrade.NewClient(ctx, dialer, serverAddr, options.HTTPUpgradeOptions, tlsConfig)
-	case C.V2RayTransportTypeXHTTP:
-		return v2rayxhttp.NewClient(ctx, dialer, serverAddr, options.XHTTPOptions, tlsConfig)
-	default:
-"""
-    if client_case not in tr_text:
-        raise SystemExit("transport/v2ray/transport.go: HTTPUpgrade client case not found")
-    tr_text = tr_text.replace(client_case, client_new, 1)
-    tr_path.write_text(tr_text)
-    print("Patched transport/v2ray/transport.go with xhttp")
-else:
-    print("transport/v2ray/transport.go already has xhttp")
+  echo "Binding libbox $VERSION ($BIND_TARGET, tags: $TAGS)..."
+  (
+    cd "$SRC"
+    gomobile bind \
+      -v \
+      -o "$DEST" \
+      -target "$BIND_TARGET" \
+      -androidapi "$ANDROID_API" \
+      -javapkg=io.nekohasekai \
+      -libname=box \
+      -trimpath \
+      -ldflags "$ldflags" \
+      -tags "$TAGS" \
+      ./experimental/libbox
+  )
 
-shutil.copyfile(bundle / "v2ray_xhttp.go", src / "option" / "v2ray_xhttp.go")
-xhttp_dir = src / "transport" / "v2rayxhttp"
-xhttp_dir.mkdir(parents=True, exist_ok=True)
-shutil.copyfile(bundle / "client.go", xhttp_dir / "client.go")
-print("Installed Layer XHTTP client")
-PY
+  if [[ ! -s "$DEST" ]]; then
+    echo "gomobile bind produced an empty AAR" >&2
+    exit 1
+  fi
 
-# gomobile init is needed once for the NDK toolchain.
-gomobile init >/dev/null 2>&1 || gomobile init
+  echo "Saved $DEST ($(du -h "$DEST" | awk '{print $1}'))"
+  echo "sing-box $display  target=$BIND_TARGET  gomobile=$GOMOBILE_VERSION"
+}
 
-TAGS="with_gvisor,with_utls,with_clash_api,badlinkname,tfogo_checklinkname0"
-DISPLAY_VERSION="${VERSION#v}-layer"
-LDFLAGS="-s -w -buildid= -checklinkname=0 -X github.com/sagernet/sing-box/constant.Version=${DISPLAY_VERSION} -X internal/godebug.defaultGODEBUG=multipathtcp=0"
-
-mkdir -p "$(dirname "$DEST")"
-rm -f "$DEST"
-
-echo "Binding libbox $VERSION ($BIND_TARGET, tags: $TAGS)..."
-cd "$SRC"
-gomobile bind \
-  -v \
-  -o "$DEST" \
-  -target "$BIND_TARGET" \
-  -androidapi "$ANDROID_API" \
-  -javapkg=io.nekohasekai \
-  -libname=box \
-  -trimpath \
-  -ldflags "$LDFLAGS" \
-  -tags "$TAGS" \
-  ./experimental/libbox
-
-if [[ ! -s "$DEST" ]]; then
-  echo "gomobile bind produced an empty AAR" >&2
-  exit 1
-fi
-
-echo "Saved $DEST ($(du -h "$DEST" | awk '{print $1}'))"
-echo "sing-box $DISPLAY_VERSION  target=$BIND_TARGET"
+case "$COMMAND" in
+  apply)
+    ensure_source
+    apply_patches
+    ;;
+  refresh)
+    refresh_patches
+    ;;
+  build)
+    ensure_source
+    apply_patches
+    bind_aar
+    ;;
+  *)
+    echo "usage: $0 [build|apply|refresh]" >&2
+    exit 1
+    ;;
+esac

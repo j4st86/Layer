@@ -13,17 +13,23 @@ if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
 }
 
+val singBoxProperties = Properties()
+rootProject.file("sing-box.properties").inputStream().use { singBoxProperties.load(it) }
+val singBoxTag = singBoxProperties.getProperty("singbox.tag")
+    ?: error("sing-box.properties is missing singbox.tag")
+
 android {
     namespace = "com.layer.app"
     compileSdk = 37
 
     defaultConfig {
         applicationId = "com.layer.app"
-        minSdk = 26
+        minSdk = 34
         targetSdk = 36
         versionCode = 11
         versionName = "1.2.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "SINGBOX_TAG", "\"$singBoxTag\"")
     }
 
     signingConfigs {
