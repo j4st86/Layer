@@ -42,8 +42,7 @@ import com.layer.app.R
 import com.layer.app.ui.LocalAppContainer
 import com.layer.app.ui.components.InfoRow
 import com.layer.app.ui.components.TonalCard
-import com.layer.core.diagnostics.Branding
-import io.nekohasekai.libbox.Libbox
+import com.layer.app.box.BoxRuntime
 import kotlinx.coroutines.launch
 
 private val WiredBlack = Color(0xFF0B0B0B)
@@ -63,9 +62,7 @@ fun DeveloperScreen(
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val vpn = container.vpnController.status.collectAsStateWithLifecycle().value
-    val libbox = remember {
-        Branding.libboxVersion(runCatching { Libbox.version() }.getOrNull())
-    }
+    val libbox = remember { BoxRuntime.version() }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
@@ -123,6 +120,7 @@ fun DeveloperScreen(
                     InfoRow(stringResource(R.string.navi_app), "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
                     InfoRow(stringResource(R.string.navi_package), context.packageName)
                     InfoRow("libbox", libbox)
+                    InfoRow("sing-box", BuildConfig.SINGBOX_TAG)
                     InfoRow("Android", "${Build.VERSION.RELEASE} / SDK ${Build.VERSION.SDK_INT}")
                     InfoRow(stringResource(R.string.navi_device), "${Build.MANUFACTURER} ${Build.MODEL}")
                     InfoRow("Debug", BuildConfig.DEBUG.toString())

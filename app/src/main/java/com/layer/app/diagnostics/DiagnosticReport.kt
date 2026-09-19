@@ -12,10 +12,9 @@ import com.layer.app.BuildConfig
 import com.layer.app.data.RuleSetDownloader
 import com.layer.app.di.AppContainer
 import com.layer.app.vpn.BackgroundKeepAlive
+import com.layer.app.box.BoxRuntime
 import com.layer.core.config.AdBlockPolicy
-import com.layer.core.diagnostics.Branding
 import com.layer.core.diagnostics.LogSanitizer
-import io.nekohasekai.libbox.Libbox
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -44,7 +43,7 @@ object DiagnosticReport {
                 ).json
             }.getOrDefault("")
         }
-        val libboxVersion = Branding.libboxVersion(runCatching { Libbox.version() }.getOrNull())
+        val libboxVersion = BoxRuntime.version()
         return buildString {
             appendLine("Layer diagnostic report")
             appendLine("Generated: $stamp")
@@ -53,6 +52,7 @@ object DiagnosticReport {
             appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
             appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
             appendLine("libbox: $libboxVersion")
+            appendLine("sing-box tag: ${BuildConfig.SINGBOX_TAG}")
             appendLine("Build: debug=${BuildConfig.DEBUG}")
             appendLine("VPN state: ${status.state} / ${status.message}")
             appendLine("Background: ${BackgroundKeepAlive.debugSnapshot(context)}")

@@ -4,9 +4,9 @@ import android.content.Context
 import android.content.res.Resources
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
+import com.layer.app.box.BoxRuntime
 import com.layer.core.i18n.UiLanguage
 import com.layer.core.i18n.UiLanguageState
-import io.nekohasekai.libbox.Libbox
 
 enum class AppLanguage {
     AUTO,
@@ -61,7 +61,7 @@ object AppLanguagePreferences {
         UiLanguageState.current = resolved(language)
         if (updateLibbox) {
             val tag = if (UiLanguageState.isRussian) "ru" else "en"
-            runCatching { Libbox.setLocale(tag) }
+            BoxRuntime.setLocale(tag)
         }
     }
 

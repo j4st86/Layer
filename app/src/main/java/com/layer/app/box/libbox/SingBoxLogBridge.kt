@@ -1,6 +1,7 @@
-package com.layer.app.vpn
+package com.layer.app.box.libbox
 
 import com.layer.app.diagnostics.DiagnosticLog
+import com.layer.app.vpn.VpnStatusStore
 import com.layer.core.diagnostics.BoxLogFilter
 import com.layer.core.diagnostics.BoxLogRateLimiter
 import io.nekohasekai.libbox.CommandClientHandler
@@ -11,7 +12,7 @@ import io.nekohasekai.libbox.OutboundGroupIterator
 import io.nekohasekai.libbox.StatusMessage
 import io.nekohasekai.libbox.StringIterator
 
-class SingBoxLogBridge(private val diagnostics: DiagnosticLog) : CommandClientHandler {
+internal class SingBoxLogBridge(private val diagnostics: DiagnosticLog) : CommandClientHandler {
     private var lastStatMs = 0L
     private val rateLimiter = BoxLogRateLimiter()
 

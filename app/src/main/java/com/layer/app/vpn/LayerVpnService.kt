@@ -5,11 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.net.ConnectivityManager
-import android.net.IpPrefix
 import android.net.NetworkCapabilities
 import android.net.VpnService
-import android.os.Build
-import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
@@ -17,22 +14,15 @@ import com.layer.app.LayerApp
 import com.layer.app.R
 import com.layer.app.data.AdBlockDownloader
 import com.layer.app.data.RuleSetDownloader
+import com.layer.app.box.BoxCommandCallbacks
+import com.layer.app.box.BoxHost
+import com.layer.app.box.BoxRuntime
+import com.layer.app.box.libbox.LibboxSession
 import com.layer.core.config.RuleSetCatalog
 import com.layer.core.config.AutoServerPolicy
 import com.layer.core.config.IdleRecoveryPolicy
-import com.layer.core.diagnostics.Branding
 import com.layer.core.diagnostics.ErrorMapper
 import com.layer.core.diagnostics.LogSanitizer
-import io.nekohasekai.libbox.CommandClient
-import io.nekohasekai.libbox.CommandClientOptions
-import io.nekohasekai.libbox.CommandServer
-import io.nekohasekai.libbox.CommandServerHandler
-import io.nekohasekai.libbox.Libbox
-import io.nekohasekai.libbox.OverrideOptions
-import io.nekohasekai.libbox.RoutePrefixIterator
-import io.nekohasekai.libbox.StringIterator
-import io.nekohasekai.libbox.SystemProxyStatus
-import io.nekohasekai.libbox.TunOptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -45,16 +35,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.net.InetAddress
 
-class LayerVpnService : VpnService(), CommandServerHandler {
+class LayerVpnService : VpnService(), BoxHost, BoxCommandCallbacks {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lifecycleMutex = Mutex()
     private val notification by lazy { VpnNotification(this) }
-    private var vpnFd: ParcelFileDescriptor? = null
-    private var commandServer: CommandServer? = null
-    private var logClient: CommandClient? = null
-    private var platform: SingBoxPlatform? = null
+    private var box: LibboxSession? = null
 
     private val container get() = (application as LayerApp).container
     private var stopping = false
@@ -91,7 +77,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
                 // START, Always-on VPN, or reboot: system may pass a null action.
                 stopping = false
                 val state = VpnStatusStore.status.value.state
-                if (commandServer != null &&
+                if (box != null &&
                     (state == VpnConnectionState.CONNECTED ||
                         state == VpnConnectionState.CONNECTING ||
                         state == VpnConnectionState.RECONNECTING)
@@ -138,7 +124,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
     private suspend fun startVpnLocked() {
         if (stopping) return
         val already = VpnStatusStore.status.value.state
-        if (commandServer != null &&
+        if (box != null &&
             (already == VpnConnectionState.CONNECTED ||
                 already == VpnConnectionState.CONNECTING ||
                 already == VpnConnectionState.RECONNECTING)
@@ -203,16 +189,16 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         }
         container.diagnostics.lastStartedConfig = LogSanitizer.sanitize(generated.json)
         try {
-            runCatching { Libbox.checkConfig(generated.json) }
+            runCatching { BoxRuntime.checkConfig(generated.json) }
                 .onSuccess { dbg("[CFG] event=check-config ok bytes=${generated.json.length}") }
                 .onFailure { error ->
                     fail(error.message ?: getString(R.string.error_config_singbox))
                     return
                 }
             if (stopping) return
-            commandServer = ensureCommandServer()
+            box = ensureBox()
             dbg("[VPN] event=start-or-reload")
-            commandServer?.startOrReloadService(generated.json, OverrideOptions())
+            box?.startOrReload(generated.json)
             if (stopping) return
             startedElapsed = SystemClock.elapsedRealtime()
             lastIdleRecoverElapsed = startedElapsed
@@ -236,7 +222,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
 
     private suspend fun reloadInternalLocked() {
         if (stopping) return
-        if (commandServer == null) {
+        if (box == null) {
             dbg("[VPN] event=reload action=start-vpn reason=no-command-server")
             startVpnLocked()
             return
@@ -262,12 +248,12 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             return
         }
         try {
-            runCatching { Libbox.checkConfig(generated.json) }.onFailure { error ->
+            runCatching { BoxRuntime.checkConfig(generated.json) }.onFailure { error ->
                     fail(error.message ?: getString(R.string.error_config_singbox))
                 return
             }
             if (stopping) return
-            commandServer?.startOrReloadService(generated.json, OverrideOptions())
+            box?.startOrReload(generated.json)
             if (stopping) return
             startedElapsed = SystemClock.elapsedRealtime()
             lastIdleRecoverElapsed = startedElapsed
@@ -299,10 +285,10 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             adBlockRuleSetPath = prepared.adBlockPath,
         )
         if (!withRemote.isSuccess) return
-        if (runCatching { Libbox.checkConfig(withRemote.json) }.isFailure) return
+        if (runCatching { BoxRuntime.checkConfig(withRemote.json) }.isFailure) return
 
         val promoted = runCatching {
-            commandServer?.startOrReloadService(withRemote.json, OverrideOptions())
+            box?.startOrReload(withRemote.json)
         }
         if (promoted.isSuccess) {
             dbg("[RULE] event=promote action=ok via=proxy")
@@ -318,8 +304,8 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         )
         val reverted = runCatching {
             check(withoutRemote.isSuccess) { withoutRemote.error ?: getString(R.string.error_config) }
-            Libbox.checkConfig(withoutRemote.json)
-            commandServer?.startOrReloadService(withoutRemote.json, OverrideOptions())
+            BoxRuntime.checkConfig(withoutRemote.json)
+            box?.startOrReload(withoutRemote.json)
         }
         if (reverted.isFailure) {
             dbg(
@@ -331,36 +317,19 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         dbg("[RULE] event=promote action=reverted reason=remote-lists-failed")
     }
 
-    private fun ensureCommandServer(): CommandServer {
-        commandServer?.let { return it }
-        val iface = platform ?: SingBoxPlatform(this).also { platform = it }
-        dbg("[BOX] event=command-server-start libbox=${Branding.libboxVersion(runCatching { Libbox.version() }.getOrNull())}")
-        val server = CommandServer(this, iface)
-        server.start()
-        commandServer = server
-        attachLogClient()
-        return server
+    private fun ensureBox(): LibboxSession {
+        box?.let { return it }
+        return LibboxSession(
+            vpn = this,
+            host = this,
+            diagnostics = container.diagnostics,
+            commands = this,
+        ).also { box = it }
     }
 
-    private fun attachLogClient() {
-        runCatching { logClient?.disconnect() }
-        logClient = null
-        val options = CommandClientOptions().apply {
-            addCommand(Libbox.CommandLog)
-            addCommand(Libbox.CommandStatus)
-            statusInterval = 1_000_000_000L
-        }
-        val client = CommandClient(SingBoxLogBridge(container.diagnostics), options)
-        val connected = runCatching { client.connect() }
-        if (connected.isFailure) {
-            dbg("[BOX] event=log-client action=fail error=${connected.exceptionOrNull()?.message}")
-            runCatching { client.connect() }
-                .onFailure { dbg("[BOX] event=log-client action=retry-fail error=${it.message}") }
-                .onSuccess { dbg("[BOX] event=log-client action=retry-ok") }
-        } else {
-            dbg("[BOX] event=log-client action=ok")
-        }
-        logClient = client
+    private fun releaseBox() {
+        runCatching { box?.close() }
+        box = null
     }
 
     private fun stopVpn() {
@@ -372,14 +341,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         unregisterIdleRecovery()
         VpnStatusStore.clearTraffic()
         VpnStatusStore.update(VpnUiStatus(VpnConnectionState.DISCONNECTED, getString(R.string.status_disconnected_short)))
-        runCatching { logClient?.disconnect() }
-        runCatching { commandServer?.closeService() }
-        runCatching { commandServer?.close() }
-        runCatching { vpnFd?.close() }
-        logClient = null
-        commandServer = null
-        vpnFd = null
-        platform = null
+        releaseBox()
         startedElapsed = 0L
         lastIdleRecoverElapsed = 0L
         lastHandoffWakeElapsed = 0L
@@ -486,14 +448,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
                 errorDetails = mapped.details,
             ),
         )
-        runCatching { logClient?.disconnect() }
-        runCatching { commandServer?.closeService() }
-        runCatching { commandServer?.close() }
-        runCatching { vpnFd?.close() }
-        logClient = null
-        commandServer = null
-        vpnFd = null
-        platform = null
+        releaseBox()
         startedElapsed = 0L
         lastIdleRecoverElapsed = 0L
         lastHandoffWakeElapsed = 0L
@@ -503,14 +458,14 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         stopSelf()
     }
 
-    fun notifyAutoServerTransport(caps: NetworkCapabilities) {
+    override fun notifyAutoServerTransport(capabilities: NetworkCapabilities) {
         container.autoServerSelector.onNetworkTransportChanged(
-            AutoServerSelector.transportKind(caps),
+            AutoServerSelector.transportKind(capabilities),
         )
     }
 
     fun recoverAfterIdle(reason: String, longIdleReload: Boolean = false) {
-        if (stopping || commandServer == null) {
+        if (stopping || box == null) {
             dbg(
                 "[VPN] event=recover path=idle action=skip reason=$reason " +
                     "why=${if (stopping) "stopping" else "no-command-server"}",
@@ -548,11 +503,11 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             "[VPN] event=recover path=idle action=wake reason=$reason hasNetwork=$hasNetwork " +
                 "sinceLastMs=$sinceLast",
         )
-        runCatching { commandServer?.wake() }
+        runCatching { box?.wake() }
     }
 
-    fun recoverAfterHandoff(reason: String) {
-        if (stopping || commandServer == null) {
+    override fun recoverAfterHandoff(reason: String) {
+        if (stopping || box == null) {
             dbg(
                 "[VPN] event=recover path=handoff action=skip reason=$reason " +
                     "why=${if (stopping) "stopping" else "no-command-server"}",
@@ -585,7 +540,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         dbg(
             "[VPN] event=recover path=handoff action=wake reason=$reason hasNetwork=$hasNetwork",
         )
-        runCatching { commandServer?.wake() }
+        runCatching { box?.wake() }
     }
 
     private fun registerIdleRecovery() {
@@ -643,13 +598,13 @@ class LayerVpnService : VpnService(), CommandServerHandler {
     }
 
     private fun startIdlePoke() {
-        if (stopping || commandServer == null) return
+        if (stopping || box == null) return
         if (idlePokeJob?.isActive == true) return
         dbg("[VPN] event=idle-poke action=start intervalMs=${IdleRecoveryPolicy.idlePokeMs}")
         idlePokeJob = scope.launch {
             while (isActive) {
                 delay(IdleRecoveryPolicy.idlePokeMs)
-                if (stopping || commandServer == null) return@launch
+                if (stopping || box == null) return@launch
                 recoverAfterIdle("idle-poke")
             }
         }
@@ -682,163 +637,20 @@ class LayerVpnService : VpnService(), CommandServerHandler {
         }
     }
 
-    fun openTun(options: TunOptions): Int {
-        if (prepare(this) != null) error("android: missing vpn permission")
-        val dump = StringBuilder()
-        fun note(line: String) {
-            dump.appendLine(line)
-            dbg(line)
-        }
-        val builder = Builder()
-            .setSession("Layer")
-            .setMtu(options.mtu)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            builder.setMetered(false)
-        }
-        note(
-            "[TUN] mtu=${options.mtu} autoRoute=${options.autoRoute} " +
-                "strict=${options.strictRoute} dnsMode=${options.dnsMode?.value}",
-        )
-        val inet4 = drainPrefixes(options.inet4Address)
-        val inet6 = drainPrefixes(options.inet6Address)
-        inet4.forEach { (address, prefix) ->
-            builder.addAddress(address, prefix)
-            note("[TUN] address $address/$prefix")
-        }
-        inet6.forEach { (address, prefix) ->
-            builder.addAddress(address, prefix)
-            note("[TUN] address6 $address/$prefix")
-        }
-        if (options.autoRoute) {
-            val dnsServers = mutableListOf<String>()
-            val dnsResult = runCatching {
-                drainStrings(options.dnsServerAddress).also { dnsServers += it }
-            }
-            if (dnsResult.isFailure) {
-                note("[TUN] dnsServerAddress error: ${dnsResult.exceptionOrNull()?.message}")
-            }
-            if (dnsServers.isEmpty()) {
-                dnsServers += listOf("1.1.1.1", "8.8.8.8")
-                note("[TUN] dns fallback=1.1.1.1,8.8.8.8 reason=libbox-empty")
-            }
-            dnsServers.forEach { server ->
-                builder.addDnsServer(server)
-                note("[TUN] dns $server")
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                val inet4Routes = drainPrefixes(options.inet4RouteAddress)
-                if (inet4Routes.isNotEmpty()) {
-                    inet4Routes.forEach { (address, prefix) ->
-                        builder.addRoute(address, prefix)
-                        note("[TUN] route $address/$prefix")
-                    }
-                } else {
-                    builder.addRoute("0.0.0.0", 0)
-                    note("[TUN] route 0.0.0.0/0 fallback reason=inet4RouteAddress-empty")
-                }
-                val inet6Routes = drainPrefixes(options.inet6RouteAddress)
-                if (inet6Routes.isNotEmpty()) {
-                    inet6Routes.forEach { (address, prefix) ->
-                        builder.addRoute(address, prefix)
-                        note("[TUN] route6 $address/$prefix")
-                    }
-                } else if (inet6.isNotEmpty()) {
-                    builder.addRoute("::", 0)
-                    note("[TUN] route ::/0")
-                }
-                drainPrefixes(options.inet4RouteExcludeAddress).forEach { (address, prefix) ->
-                    builder.excludeRoute(IpPrefix(InetAddress.getByName(address), prefix))
-                    note("[TUN] exclude $address/$prefix")
-                }
-                drainPrefixes(options.inet6RouteExcludeAddress).forEach { (address, prefix) ->
-                    builder.excludeRoute(IpPrefix(InetAddress.getByName(address), prefix))
-                    note("[TUN] exclude6 $address/$prefix")
-                }
-            } else {
-                drainPrefixes(options.inet4RouteRange).forEach { (address, prefix) ->
-                    builder.addRoute(address, prefix)
-                    note("[TUN] range $address/$prefix")
-                }
-                drainPrefixes(options.inet6RouteRange).forEach { (address, prefix) ->
-                    builder.addRoute(address, prefix)
-                    note("[TUN] range6 $address/$prefix")
-                }
-            }
-            drainStrings(options.includePackage).forEach { pkg ->
-                runCatching { builder.addAllowedApplication(pkg) }
-                    .onSuccess { note("[TUN] allow $pkg") }
-                    .onFailure { note("[TUN] allow $pkg failed: ${it.message}") }
-            }
-            drainStrings(options.excludePackage).forEach { pkg ->
-                runCatching { builder.addDisallowedApplication(pkg) }
-                    .onSuccess { note("[TUN] disallow $pkg") }
-                    .onFailure { note("[TUN] disallow $pkg failed: ${it.message}") }
-            }
-        }
-        runCatching { builder.addDisallowedApplication(packageName) }
-            .onSuccess { note("[TUN] disallow self $packageName") }
-            .onFailure { note("[TUN] disallow self failed: ${it.message}") }
-        // Close the old PFD before establish(). The next establish() already
-        // invalidates it; reading previous.fd afterwards throws "Already closed".
-        val previous = vpnFd
-        vpnFd = null
-        if (previous != null) {
-            runCatching { previous.close() }
-                .onSuccess { note("[TUN] closed previous") }
-                .onFailure { note("[TUN] previous close: ${it.message}") }
-        }
-        val pfd = builder.establish() ?: error("android: the application is not prepared or is revoked")
-        vpnFd = pfd
-        note("[TUN] establish ok fd=${pfd.fd}")
-        container.diagnostics.lastTunDump = dump.toString().trim()
-        return pfd.fd
+    override fun onTunDump(dump: String) {
+        container.diagnostics.lastTunDump = dump
     }
 
-    fun onLibboxLog(message: String) {
-        val clean = LogSanitizer.sanitize(message)
-        if (clean.isNotBlank()) dbg("[BOX] $clean")
-    }
-
-    fun dbg(message: String) {
+    override fun dbg(message: String) {
         container.diagnostics.append(message)
     }
 
-    override fun serviceReload() {
+    override fun onBoxReload() {
         scope.launch { reloadInternal() }
     }
 
-    override fun serviceStop() {
+    override fun onBoxStop() {
         stopVpn()
-    }
-
-    override fun getSystemProxyStatus(): SystemProxyStatus = SystemProxyStatus()
-
-    override fun setSystemProxyEnabled(isEnabled: Boolean) = Unit
-
-    override fun triggerNativeCrash() = Unit
-
-    override fun writeDebugMessage(message: String?) {
-        if (!message.isNullOrBlank()) dbg("[BOX] $message")
-    }
-
-    override fun connectSSHAgent(): Int = -1
-
-    private fun drainPrefixes(iterator: RoutePrefixIterator): List<Pair<String, Int>> {
-        val out = mutableListOf<Pair<String, Int>>()
-        while (iterator.hasNext()) {
-            val prefix = iterator.next() ?: continue
-            out += prefix.address() to prefix.prefix()
-        }
-        return out
-    }
-
-    private fun drainStrings(iterator: StringIterator): List<String> {
-        val out = mutableListOf<String>()
-        while (iterator.hasNext()) {
-            val value = iterator.next()
-            if (!value.isNullOrBlank()) out += value
-        }
-        return out
     }
 
     companion object {
@@ -860,11 +672,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
             if (serverName.isNotBlank()) {
                 intent.putExtra(EXTRA_SERVER_NAME, serverName)
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            context.startForegroundService(intent)
         }
 
         fun stop(context: Context) {
@@ -873,11 +681,7 @@ class LayerVpnService : VpnService(), CommandServerHandler {
 
         fun reload(context: Context) {
             val intent = Intent(context, LayerVpnService::class.java).setAction(ACTION_RELOAD)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            context.startForegroundService(intent)
         }
 
         fun stopIntent(context: Context): Intent {

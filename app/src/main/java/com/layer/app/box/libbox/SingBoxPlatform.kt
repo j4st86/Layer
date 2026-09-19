@@ -1,4 +1,4 @@
-package com.layer.app.vpn
+package com.layer.app.box.libbox
 
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
@@ -6,10 +6,13 @@ import android.net.LinkProperties
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.net.VpnService
 import android.os.Build
 import android.os.Process
 import android.system.OsConstants
-import com.layer.core.diagnostics.LogSanitizer
+import com.layer.app.box.BoxHost
+import com.layer.app.vpn.AutoServerSelector
+import com.layer.app.vpn.UnderlyingDns
 import io.nekohasekai.libbox.BridgeOptions
 import io.nekohasekai.libbox.BridgeSession
 import io.nekohasekai.libbox.ConnectionOwner
@@ -30,7 +33,11 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import io.nekohasekai.libbox.NetworkInterface as LibboxNetworkInterface
 
-class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface {
+internal class SingBoxPlatform(
+    private val vpn: VpnService,
+    private val host: BoxHost,
+    private val tun: LibboxTun,
+) : PlatformInterface {
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var protectCount = 0
     private var lookupCount = 0
@@ -43,21 +50,21 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
     private var lastIfaceLog = ""
 
     private val connectivity: ConnectivityManager
-        get() = service.getSystemService(ConnectivityManager::class.java)
+        get() = vpn.getSystemService(ConnectivityManager::class.java)
 
     override fun usePlatformAutoDetectInterfaceControl(): Boolean = true
 
     override fun autoDetectInterfaceControl(fd: Int) {
-        service.protect(fd)
+        vpn.protect(fd)
         protectCount += 1
         if (protectCount <= 25 || protectCount % 50 == 0) {
-            service.dbg("[NET] event=protect fd=$fd count=$protectCount")
+            host.dbg("[NET] event=protect fd=$fd count=$protectCount")
         }
     }
 
-    override fun openTun(options: TunOptions): Int = service.openTun(options)
+    override fun openTun(options: TunOptions): Int = tun.open(options)
 
-    override fun useProcFS(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+    override fun useProcFS(): Boolean = false
 
     override fun findConnectionOwner(
         ipProtocol: Int,
@@ -66,16 +73,13 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
         destinationAddress: String,
         destinationPort: Int,
     ): ConnectionOwner {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            error("android: connection owner requires API 29")
-        }
         val uid = connectivity.getConnectionOwnerUid(
             ipProtocol,
             InetSocketAddress(sourceAddress, sourcePort),
             InetSocketAddress(destinationAddress, destinationPort),
         )
         if (uid == Process.INVALID_UID) error("android: connection owner not found")
-        val packages = service.packageManager.getPackagesForUid(uid)
+        val packages = vpn.packageManager.getPackagesForUid(uid)
         return ConnectionOwner().apply {
             userId = uid
             userName = packages?.firstOrNull().orEmpty()
@@ -89,10 +93,10 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
         val first = underlyingNetwork
         if (first != null) {
             val name = cm.getLinkProperties(first)?.interfaceName.orEmpty()
-            service.dbg("[NET] event=underlying iface=$name")
+            host.dbg("[NET] event=underlying iface=$name")
             notifyInterfaceUpdate(cm, first, listener)
         } else {
-            service.dbg("[NET] event=underlying iface=none")
+            host.dbg("[NET] event=underlying iface=none")
         }
         networkCallback = object : ConnectivityManager.NetworkCallback() {
             override fun onAvailable(network: Network) {
@@ -103,10 +107,10 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
                 val transport = caps?.let {
                     AutoServerSelector.transportLabel(AutoServerSelector.transportKind(it))
                 } ?: "unknown"
-                service.dbg("[NET] event=available iface=$name transport=$transport")
+                host.dbg("[NET] event=available iface=$name transport=$transport")
                 underlyingNetwork = network
                 notifyInterfaceUpdate(cm, network, listener)
-                cm.getNetworkCapabilities(network)?.let { service.notifyAutoServerTransport(it) }
+                cm.getNetworkCapabilities(network)?.let { host.notifyAutoServerTransport(it) }
             }
 
             override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
@@ -117,11 +121,11 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
                 val validated = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
                 if (validated && !lastValidated) {
                     val name = cm.getLinkProperties(network)?.interfaceName.orEmpty()
-                    service.dbg("[NET] event=validated iface=$name")
-                    service.recoverAfterHandoff("network-validated")
+                    host.dbg("[NET] event=validated iface=$name")
+                    host.recoverAfterHandoff("network-validated")
                 }
                 lastValidated = validated
-                service.notifyAutoServerTransport(networkCapabilities)
+                host.notifyAutoServerTransport(networkCapabilities)
             }
 
             override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
@@ -144,14 +148,14 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
                         val transport = caps?.let {
                             AutoServerSelector.transportLabel(AutoServerSelector.transportKind(it))
                         } ?: "unknown"
-                        service.dbg("[NET] event=lost iface=$lostName fallback=$fbName transport=$transport")
+                        host.dbg("[NET] event=lost iface=$lostName fallback=$fbName transport=$transport")
                         notifyInterfaceUpdate(cm, fallback, listener)
-                        service.recoverAfterHandoff("network-lost")
+                        host.recoverAfterHandoff("network-lost")
                         cm.getNetworkCapabilities(fallback)?.let {
-                            service.notifyAutoServerTransport(it)
+                            host.notifyAutoServerTransport(it)
                         }
                     } else {
-                        service.dbg("[NET] event=lost iface=$lostName fallback=none")
+                        host.dbg("[NET] event=lost iface=$lostName fallback=none")
                         listener.updateDefaultInterface("", -1, false, false)
                     }
                 }
@@ -232,7 +236,7 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
         if (snapshot != lastIfaceLog) {
             lastIfaceLog = snapshot
             interfaces.forEach { boxIf ->
-                service.dbg("[NET] event=iface name=${boxIf.name} idx=${boxIf.index} type=${boxIf.type} metered=${boxIf.metered}")
+                host.dbg("[NET] event=iface name=${boxIf.name} idx=${boxIf.index} type=${boxIf.type} metered=${boxIf.metered}")
             }
         }
         return object : NetworkInterfaceIterator {
@@ -264,17 +268,17 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
                     }
                     val ips = addresses.mapNotNull { it.hostAddress }.filter { it.isNotBlank() }
                     if (ips.isEmpty()) {
-                        service.dbg("[DNS] event=local-lookup domain=$domain result=empty")
+                        host.dbg("[DNS] event=local-lookup domain=$domain result=empty")
                         ctx.errorCode(3)
                         return
                     }
                     lookupCount += 1
                     if (lookupCount <= 30 || lookupCount % 40 == 0) {
-                        service.dbg("[DNS] event=local-lookup domain=$domain ips=${ips.joinToString()}")
+                        host.dbg("[DNS] event=local-lookup domain=$domain ips=${ips.joinToString()}")
                     }
                     ctx.success(ips.joinToString("\n"))
                 } catch (error: Exception) {
-                    service.dbg("[DNS] event=local-lookup domain=$domain error=${error.message}")
+                    host.dbg("[DNS] event=local-lookup domain=$domain error=${error.message}")
                     ctx.errorCode(3)
                 }
             }
@@ -313,20 +317,18 @@ class SingBoxPlatform(private val service: LayerVpnService) : PlatformInterface 
     }
 
     override fun lookupUser(username: String): PlatformUser {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val info = runCatching {
-                service.packageManager.getApplicationInfo(
-                    username,
-                    PackageManager.ApplicationInfoFlags.of(0),
-                )
-            }.getOrNull()
-            if (info != null) {
-                return PlatformUser().apply {
-                    this.username = username
-                    uid = info.uid
-                    gid = info.uid
-                    homeDir = info.dataDir.orEmpty()
-                }
+        val info = runCatching {
+            vpn.packageManager.getApplicationInfo(
+                username,
+                PackageManager.ApplicationInfoFlags.of(0),
+            )
+        }.getOrNull()
+        if (info != null) {
+            return PlatformUser().apply {
+                this.username = username
+                uid = info.uid
+                gid = info.uid
+                homeDir = info.dataDir.orEmpty()
             }
         }
         error("user not found")
