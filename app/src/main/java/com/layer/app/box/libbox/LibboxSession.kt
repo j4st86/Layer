@@ -12,6 +12,13 @@ import io.nekohasekai.libbox.CommandServerHandler
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.OverrideOptions
 import io.nekohasekai.libbox.SystemProxyStatus
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Owns the gomobile CommandServer, log client, platform interface and TUN fd.
@@ -26,17 +33,30 @@ class LibboxSession(
     private val tun = LibboxTun(vpn, host)
     private val platform = SingBoxPlatform(vpn, host, tun)
     private val commandServer = CommandServer(this, platform)
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var logClient: CommandClient? = null
-    private val logBridge = SingBoxLogBridge(diagnostics)
+    private val logBridge = SingBoxLogBridge(
+        diagnostics = diagnostics,
+        onDisconnected = ::onStreamLost,
+        onLogStreamReady = { logAttempts = 0 },
+    )
+
+    @Volatile
+    private var closed = false
+    private var logAttempts = 0
+    private var reattachJob: Job? = null
 
     init {
         host.dbg("[BOX] event=command-server-start libbox=${BoxRuntime.version()}")
         commandServer.start()
-        attachLogs()
     }
 
     fun startOrReload(json: String) {
         commandServer.startOrReloadService(json, OverrideOptions())
+        // 1.14.1 serves the streams over gRPC, and GetDefaultLogLevel answers
+        // "invalid argument" while the box instance is nil. Attaching from init
+        // lost that race every time and killed core logs for the whole session.
+        if (logClient == null) attachLogs()
     }
 
     fun wake() {
@@ -44,6 +64,9 @@ class LibboxSession(
     }
 
     fun close() {
+        closed = true
+        reattachJob?.cancel()
+        scope.cancel()
         runCatching { logClient?.disconnect() }
         runCatching { commandServer.closeService() }
         runCatching { commandServer.close() }
@@ -51,6 +74,30 @@ class LibboxSession(
         logClient = null
     }
 
+    /**
+     * A reload nils the instance, so both streams end on every reload and the
+     * gomobile goroutines never come back on their own.
+     */
+    @Synchronized
+    private fun onStreamLost(message: String?) {
+        if (closed || reattachJob?.isActive == true) return
+        if (logAttempts >= MAX_LOG_ATTEMPTS) {
+            host.dbg("[BOX] event=log-client action=give-up attempts=$logAttempts")
+            return
+        }
+        val attempt = ++logAttempts
+        reattachJob = scope.launch {
+            delay(REATTACH_BASE_MS * attempt)
+            if (closed) return@launch
+            host.dbg(
+                "[BOX] event=log-client action=reattach attempt=$attempt " +
+                    "after=${message?.takeIf { it.isNotBlank() } ?: "-"}",
+            )
+            attachLogs()
+        }
+    }
+
+    @Synchronized
     private fun attachLogs() {
         runCatching { logClient?.disconnect() }
         logClient = null
@@ -81,4 +128,9 @@ class LibboxSession(
         if (!message.isNullOrBlank()) host.dbg("[BOX] $message")
     }
     override fun connectSSHAgent(): Int = -1
+
+    private companion object {
+        const val MAX_LOG_ATTEMPTS = 5
+        const val REATTACH_BASE_MS = 1_000L
+    }
 }

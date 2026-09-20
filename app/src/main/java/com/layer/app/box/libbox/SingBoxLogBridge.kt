@@ -12,7 +12,11 @@ import io.nekohasekai.libbox.OutboundGroupIterator
 import io.nekohasekai.libbox.StatusMessage
 import io.nekohasekai.libbox.StringIterator
 
-internal class SingBoxLogBridge(private val diagnostics: DiagnosticLog) : CommandClientHandler {
+internal class SingBoxLogBridge(
+    private val diagnostics: DiagnosticLog,
+    private val onDisconnected: (String?) -> Unit,
+    private val onLogStreamReady: () -> Unit,
+) : CommandClientHandler {
     private var lastStatMs = 0L
     private val rateLimiter = BoxLogRateLimiter()
 
@@ -27,12 +31,14 @@ internal class SingBoxLogBridge(private val diagnostics: DiagnosticLog) : Comman
             "[BOX] event=log-stream action=disconnected" +
                 (message?.let { " error=$it" } ?: ""),
         )
+        onDisconnected(message)
     }
 
     override fun initializeClashMode(modeList: StringIterator?, currentMode: String?) = Unit
 
     override fun setDefaultLogLevel(level: Int) {
         diagnostics.append("[BOX] event=log-level level=$level name=${levelName(level)}")
+        onLogStreamReady()
     }
 
     override fun updateClashMode(mode: String?) = Unit
