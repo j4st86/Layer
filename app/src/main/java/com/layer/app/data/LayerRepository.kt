@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
-import android.os.Build
 import com.layer.app.R
 import com.layer.core.config.ConnectionIdentity
 import com.layer.core.config.DuplicateConnectionException
@@ -362,12 +361,7 @@ class LayerRepository(
     suspend fun installedApps(): List<InstalledApp> = withContext(Dispatchers.IO) {
         val pm = context.packageManager
         val launcher = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
-        val resolved = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            pm.queryIntentActivities(launcher, PackageManager.ResolveInfoFlags.of(0))
-        } else {
-            @Suppress("DEPRECATION")
-            pm.queryIntentActivities(launcher, 0)
-        }
+        val resolved = pm.queryIntentActivities(launcher, PackageManager.ResolveInfoFlags.of(0))
         resolved
             .map { it.activityInfo.applicationInfo }
             .filter { it.packageName != context.packageName }
@@ -434,12 +428,7 @@ class LayerRepository(
     private fun installedLabel(packageName: String): String? {
         val pm = context.packageManager
         return runCatching {
-            val info = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                pm.getApplicationInfo(packageName, PackageManager.ApplicationInfoFlags.of(0))
-            } else {
-                @Suppress("DEPRECATION")
-                pm.getApplicationInfo(packageName, 0)
-            }
+            val info = pm.getApplicationInfo(packageName, PackageManager.ApplicationInfoFlags.of(0))
             info.loadLabel(pm).toString()
         }.getOrNull()
     }

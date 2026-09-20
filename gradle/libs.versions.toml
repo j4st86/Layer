@@ -13,6 +13,8 @@ coroutines = "1.11.0"
 serialization = "1.11.0"
 junit = "4.13.2"
 json-schema-validator = "2.0.4"
+room = "2.8.4"
+ksp = "2.3.11"
 material = "1.14.0"
 appcompat = "1.8.0"
 play-services-code-scanner = "16.1.0"
@@ -42,9 +44,14 @@ androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version
 play-services-code-scanner = { group = "com.google.android.gms", name = "play-services-code-scanner", version.ref = "play-services-code-scanner" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 json-schema-validator = { group = "com.networknt", name = "json-schema-validator", version.ref = "json-schema-validator" }
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+androidx-room = { id = "androidx.room", version.ref = "room" }
