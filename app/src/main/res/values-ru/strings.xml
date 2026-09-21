@@ -76,8 +76,7 @@
     <string name="field_note">Примечание</string>
     <string name="field_note_placeholder">Как показывать на главной</string>
     <string name="field_name">Имя</string>
-    <string name="field_address">Адрес</string>
-    <string name="field_port">Порт</string>
+    <string name="field_fingerprint">Фингерпринт</string>
     <string name="no_servers_count">Нет серверов</string>
 
     <plurals name="server_count">
@@ -85,12 +84,6 @@
         <item quantity="few">%d сервера</item>
         <item quantity="many">%d серверов</item>
         <item quantity="other">%d сервера</item>
-    </plurals>
-    <plurals name="minutes_count">
-        <item quantity="one">%d минута</item>
-        <item quantity="few">%d минуты</item>
-        <item quantity="many">%d минут</item>
-        <item quantity="other">%d минуты</item>
     </plurals>
 
     <string name="apps_title">Приложения</string>
@@ -118,12 +111,11 @@
     <string name="settings_auto_select">Автоматический выбор сервера</string>
     <string name="settings_auto_select_on">Автоматически выбирать лучший доступный сервер.</string>
     <string name="settings_auto_select_need_two">Для автоматического выбора нужно минимум 2 сервера</string>
-    <string name="settings_check_every">Проверять сервера каждые</string>
     <string name="settings_routing">Маршрутизация</string>
     <string name="settings_auto_lists">Автоматический список VPN</string>
     <string name="settings_auto_lists_sub">YouTube, Telegram и другие списки itdoginfo идут через VPS.</string>
     <string name="settings_ad_block">Блокировка рекламы</string>
-    <string name="settings_ad_block_sub">Отсекает рекламу и трекеры на уровне DNS. Список обновляется по Wi‑Fi каждые 3 дня; в мобильной сети берётся копия из приложения.</string>
+    <string name="settings_ad_block_sub">Отсекает рекламу и трекеры на уровне DNS. Список обновляется по Wi‑Fi каждые 7 дней; в мобильной сети берётся копия из приложения.</string>
     <string name="settings_ipv6_sub">Включайте, если сеть и сервер его поддерживают.</string>
     <string name="settings_stability">Стабильность</string>
     <string name="settings_logs">Логи и диагностика</string>

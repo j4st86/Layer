@@ -57,7 +57,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.layer.app.R
@@ -90,14 +89,12 @@ fun SettingsScreen() {
     var confirmResetRouting by remember { mutableStateOf(false) }
     var confirmResetAll by remember { mutableStateOf(false) }
     var showAlwaysOnInfo by remember { mutableStateOf(false) }
-    var showIntervalPicker by remember { mutableStateOf(false) }
     var keepAlive by remember { mutableStateOf(BackgroundKeepAlive.status(context)) }
     var language by remember { mutableStateOf(AppLanguagePreferences.get(context)) }
     val listColors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     val checking = updateUi is UpdateUiState.Checking
     val canAutoSelect = AutoServerPolicy.canEnable(settings.servers.size)
     val autoEnabled = settings.autoSelectServerEnabled && canAutoSelect
-    val intervalEnabled = autoEnabled
     LifecycleResumeEffect(Unit) {
         keepAlive = BackgroundKeepAlive.status(context)
         onPauseOrDispose { }
@@ -167,32 +164,6 @@ fun SettingsScreen() {
                         checked = autoEnabled,
                         enabled = canAutoSelect,
                         onChecked = viewModel::setAutoSelect,
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    ListItem(
-                        headlineContent = { Text(stringResource(R.string.settings_check_every)) },
-                        supportingContent = {
-                            Text(
-                                pluralStringResource(
-                                    R.plurals.minutes_count,
-                                    AutoServerPolicy.clampInterval(settings.autoSelectIntervalMinutes),
-                                    AutoServerPolicy.clampInterval(settings.autoSelectIntervalMinutes),
-                                ),
-                            )
-                        },
-                        colors = if (intervalEnabled) {
-                            listColors
-                        } else {
-                            ListItemDefaults.colors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                headlineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                                supportingColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f),
-                            )
-                        },
-                        modifier = Modifier.clickable(
-                            enabled = intervalEnabled,
-                            onClick = { showIntervalPicker = true },
-                        ),
                     )
                 }
             }
@@ -328,42 +299,6 @@ fun SettingsScreen() {
         }
     }
 
-    if (showIntervalPicker) {
-        AlertDialog(
-            onDismissRequest = { showIntervalPicker = false },
-            title = { Text(stringResource(R.string.settings_check_every)) },
-            text = {
-                Column {
-                    AutoServerPolicy.intervalMinutes.forEach { minutes ->
-                        ListItem(
-                            headlineContent = {
-                                Text(pluralStringResource(R.plurals.minutes_count, minutes, minutes))
-                            },
-                            leadingContent = {
-                                RadioButton(
-                                    selected = minutes == settings.autoSelectIntervalMinutes,
-                                    onClick = {
-                                        viewModel.setAutoSelectInterval(minutes)
-                                        showIntervalPicker = false
-                                    },
-                                )
-                            },
-                            colors = ListItemDefaults.colors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            ),
-                            modifier = Modifier.clickable {
-                                viewModel.setAutoSelectInterval(minutes)
-                                showIntervalPicker = false
-                            },
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showIntervalPicker = false }) { Text(stringResource(R.string.action_cancel)) }
-            },
-        )
-    }
     if (confirmResetRouting) {
         AlertDialog(
             onDismissRequest = { confirmResetRouting = false },

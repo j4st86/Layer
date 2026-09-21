@@ -67,20 +67,18 @@ class AutoServerPolicyTest {
     }
 
     @Test
-    fun clampsUnknownIntervalToDefault() {
-        assertEquals(10, AutoServerPolicy.clampInterval(7))
-        assertEquals(10, AutoServerPolicy.clampInterval(5))
-        assertEquals(15, AutoServerPolicy.clampInterval(15))
-        assertEquals(20, AutoServerPolicy.clampInterval(20))
+    fun usesFixedTwentyFiveMinuteInterval() {
+        assertEquals(25, AutoServerPolicy.defaultIntervalMinutes)
+        assertEquals(25, AutoServerPolicy.clampInterval(7))
+        assertEquals(25, AutoServerPolicy.clampInterval(10))
         assertEquals(25, AutoServerPolicy.clampInterval(25))
-        assertEquals(10, AutoServerPolicy.defaultIntervalMinutes)
+        assertEquals(25, AutoServerPolicy.clampInterval(60))
     }
 
     @Test
     fun stretchesIntervalWhenDeviceIsIdle() {
-        assertEquals(10 * 60_000L, AutoServerPolicy.monitorDelayMs(10, interactive = true))
-        assertEquals(60 * 60_000L, AutoServerPolicy.monitorDelayMs(10, interactive = false))
-        assertEquals(180 * 60_000L, AutoServerPolicy.monitorDelayMs(60, interactive = false))
+        assertEquals(25 * 60_000L, AutoServerPolicy.monitorDelayMs(25, interactive = true))
+        assertEquals(75 * 60_000L, AutoServerPolicy.monitorDelayMs(25, interactive = false))
         assertTrue(AutoServerPolicy.shouldSkipPeriodicProbe(interactive = false))
         assertFalse(AutoServerPolicy.shouldSkipPeriodicProbe(interactive = true))
     }

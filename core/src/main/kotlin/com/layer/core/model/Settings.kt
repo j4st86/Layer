@@ -8,6 +8,12 @@ const val DEFAULT_VLESS_FLOW = "xtls-rprx-vision"
 const val DEFAULT_TLS_FINGERPRINT = "firefox"
 const val DEFAULT_TLS_ALPN = "http/1.1"
 
+val TLS_FINGERPRINTS = listOf("chrome", "firefox", "safari", "edge", "360", "qq")
+
+fun resolvedTlsFingerprint(value: String): String =
+    TLS_FINGERPRINTS.find { it.equals(value.trim(), ignoreCase = true) }
+        ?: DEFAULT_TLS_FINGERPRINT
+
 @Serializable
 data class VlessServerConfig(
     val address: String = "",
@@ -63,7 +69,7 @@ data class LayerSettings(
     val ipv6Enabled: Boolean = false,
     val recommendedAppsPromptDone: Boolean = false,
     val autoSelectServerEnabled: Boolean = false,
-    val autoSelectIntervalMinutes: Int = 10,
+    val autoSelectIntervalMinutes: Int = 25,
     val adBlockEnabled: Boolean = false,
 ) {
     fun manualServers(): List<SavedServer> = servers.filter { it.subscriptionId == null }

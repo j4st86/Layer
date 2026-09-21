@@ -10,7 +10,8 @@ class AdBlockPolicyTest {
     fun sharesRefreshCadenceWithItdogLists() {
         assertEquals(RuleSetCatalog.FRESHNESS_MS, AdBlockPolicy.FRESHNESS_MS)
         assertEquals(RuleSetCatalog.UPDATE_INTERVAL, AdBlockPolicy.UPDATE_INTERVAL)
-        assertEquals(3L * 24 * 60 * 60 * 1000, AdBlockPolicy.FRESHNESS_MS)
+        assertEquals(7L * 24 * 60 * 60 * 1000, AdBlockPolicy.FRESHNESS_MS)
+        assertEquals("7d", AdBlockPolicy.UPDATE_INTERVAL)
         assertEquals("rs-ads", AdBlockPolicy.TAG)
     }
 }

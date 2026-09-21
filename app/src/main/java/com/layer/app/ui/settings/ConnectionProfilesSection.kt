@@ -18,6 +18,11 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,7 +45,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.layer.app.R
@@ -48,13 +52,15 @@ import com.layer.app.ui.components.TonalCard
 import com.layer.core.model.LayerSettings
 import com.layer.core.model.SavedServer
 import com.layer.core.model.SavedSubscription
+import com.layer.core.model.TLS_FINGERPRINTS
+import com.layer.core.model.resolvedTlsFingerprint
 
 @Composable
 fun ConnectionProfilesSection(
     settings: LayerSettings,
     onRefreshSubscription: (String, (Result<Unit>) -> Unit) -> Unit,
     onSelectServer: (String) -> Unit,
-    onUpdateServer: (String, String, String, Int, String, String, String, String, String, (Result<Unit>) -> Unit) -> Unit,
+    onUpdateServer: (String, String, String, (Result<Unit>) -> Unit) -> Unit,
     onUpdateSubscriptionNote: (String, String, (Result<Unit>) -> Unit) -> Unit,
     onDeleteServer: (String) -> Unit,
     onDeleteSubscription: (String) -> Unit,
@@ -168,8 +174,8 @@ fun ConnectionProfilesSection(
         ServerEditDialog(
             server = server,
             onDismiss = { editing = null },
-            onSave = { name, address, port, sni, flow, fingerprint, alpn, note ->
-                onUpdateServer(server.id, name, address, port, sni, flow, fingerprint, alpn, note) { result ->
+            onSave = { note, fingerprint ->
+                onUpdateServer(server.id, note, fingerprint) { result ->
                     if (result.isSuccess) {
                         editing = null
                         onMessage(context.getString(R.string.params_saved))
@@ -300,31 +306,19 @@ private fun ServerRow(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ServerEditDialog(
     server: SavedServer,
     onDismiss: () -> Unit,
-    onSave: (name: String, address: String, port: Int, sni: String, flow: String, fingerprint: String, alpn: String, note: String) -> Unit,
+    onSave: (note: String, fingerprint: String) -> Unit,
 ) {
     var note by remember { mutableStateOf(server.note) }
-    var name by remember { mutableStateOf(server.name.ifBlank { server.config.visibleName() }) }
-    var address by remember { mutableStateOf(server.config.address) }
-    var port by remember { mutableStateOf(server.config.port.toString()) }
-    var sni by remember { mutableStateOf(server.config.serverName) }
-    var flow by remember { mutableStateOf(server.config.flow) }
-    var fingerprint by remember { mutableStateOf(server.config.fingerprint) }
-    var alpn by remember { mutableStateOf(server.config.alpn) }
+    var fingerprint by remember { mutableStateOf(resolvedTlsFingerprint(server.config.fingerprint)) }
+    var fingerprintMenuExpanded by remember { mutableStateOf(false) }
+    val originalName = server.name.ifBlank { server.config.visibleName() }
     fun save() {
-        onSave(
-            name,
-            address,
-            port.toIntOrNull() ?: server.config.port,
-            sni,
-            flow,
-            fingerprint,
-            alpn,
-            note,
-        )
+        onSave(note, fingerprint)
     }
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -344,19 +338,45 @@ private fun ServerEditDialog(
                     keyboardActions = KeyboardActions(onDone = { save() }),
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(name, { name = it }, label = { Text(stringResource(R.string.field_name)) }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(address, { address = it }, label = { Text(stringResource(R.string.field_address)) }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(
-                    port,
-                    { port = it },
-                    label = { Text(stringResource(R.string.field_port)) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    originalName,
+                    onValueChange = {},
+                    readOnly = true,
+                    enabled = false,
+                    label = { Text(stringResource(R.string.field_name)) },
                     modifier = Modifier.fillMaxWidth(),
                 )
-                OutlinedTextField(sni, { sni = it }, label = { Text("TLS server name") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(flow, { flow = it }, label = { Text("Flow") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(fingerprint, { fingerprint = it }, label = { Text("TLS fingerprint") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(alpn, { alpn = it }, label = { Text("ALPN") }, modifier = Modifier.fillMaxWidth())
+                ExposedDropdownMenuBox(
+                    expanded = fingerprintMenuExpanded,
+                    onExpandedChange = { fingerprintMenuExpanded = it },
+                ) {
+                    OutlinedTextField(
+                        value = fingerprint,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text(stringResource(R.string.field_fingerprint)) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = fingerprintMenuExpanded) },
+                        colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                        modifier = Modifier
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                            .fillMaxWidth(),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = fingerprintMenuExpanded,
+                        onDismissRequest = { fingerprintMenuExpanded = false },
+                    ) {
+                        TLS_FINGERPRINTS.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option) },
+                                onClick = {
+                                    fingerprint = option
+                                    fingerprintMenuExpanded = false
+                                },
+                                contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
+                            )
+                        }
+                    }
+                }
             }
         },
         confirmButton = {

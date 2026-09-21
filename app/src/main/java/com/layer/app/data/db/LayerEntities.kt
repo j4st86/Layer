@@ -11,7 +11,7 @@ data class SettingsEntity(
     val ipv6Enabled: Boolean = false,
     val recommendedAppsPromptDone: Boolean = false,
     val autoSelectServerEnabled: Boolean = false,
-    val autoSelectIntervalMinutes: Int = 10,
+    val autoSelectIntervalMinutes: Int = 25,
     val adBlockEnabled: Boolean = false,
 ) {
     companion object {

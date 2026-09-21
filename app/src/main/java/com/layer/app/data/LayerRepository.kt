@@ -21,6 +21,7 @@ import com.layer.core.model.LayerSettings
 import com.layer.core.model.SavedServer
 import com.layer.core.model.SavedSubscription
 import com.layer.core.model.VlessServerConfig
+import com.layer.core.model.resolvedTlsFingerprint
 import com.layer.core.routing.HostnameNormalizer
 import com.layer.core.routing.RoutingEngine
 import kotlinx.coroutines.Dispatchers
@@ -192,31 +193,14 @@ class LayerRepository(
 
     suspend fun updateServer(
         id: String,
-        name: String,
-        address: String,
-        port: Int,
-        sni: String,
-        flow: String,
-        fingerprint: String,
-        alpn: String,
         note: String,
+        fingerprint: String,
     ): Result<Unit> = mutex.withLock {
         val current = dataStore.settings.first()
         val existing = current.servers.find { it.id == id }
             ?: return Result.failure(IllegalArgumentException(context.getString(R.string.server_not_found)))
-        val trimmedAddress = address.trim()
-        val updatedConfig = existing.config.copy(
-            address = trimmedAddress,
-            port = port,
-            flow = flow.trim(),
-            serverName = sni.trim().ifBlank { trimmedAddress },
-            fingerprint = fingerprint.trim(),
-            alpn = alpn.trim(),
-            displayName = name.trim().ifBlank { trimmedAddress },
-        )
         val updated = existing.copy(
-            name = updatedConfig.displayName,
-            config = updatedConfig,
+            config = existing.config.copy(fingerprint = resolvedTlsFingerprint(fingerprint)),
             note = note.trim(),
         )
         saveSettings(current.replaceServer(updated))

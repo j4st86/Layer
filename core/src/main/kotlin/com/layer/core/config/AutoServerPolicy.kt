@@ -13,12 +13,11 @@ import kotlin.math.roundToLong
  *
  * DNS/TCP misses during that window are the new path settling, not a dead
  * origin. They must not count toward failover, and a follow-up probe runs
- * after settling instead of waiting for the 10-minute interval. Recovery is
+ * after settling instead of waiting for the 25-minute interval. Recovery is
  * libbox Wake, never TUN reload.
  */
 object AutoServerPolicy {
-    val intervalMinutes: List<Int> = listOf(10, 15, 20, 25, 30, 60)
-    const val defaultIntervalMinutes = 10
+    const val defaultIntervalMinutes = 25
     const val probeAttempts = 3
     const val probeTimeoutMs = 2_500
     const val minServers = 2
@@ -37,8 +36,7 @@ object AutoServerPolicy {
 
     fun canEnable(serverCount: Int): Boolean = serverCount >= minServers
 
-    fun clampInterval(minutes: Int): Int =
-        intervalMinutes.firstOrNull { it == minutes } ?: defaultIntervalMinutes
+    fun clampInterval(@Suppress("UNUSED_PARAMETER") minutes: Int): Int = defaultIntervalMinutes
 
     fun monitorDelayMs(userMinutes: Int, interactive: Boolean): Long {
         val activeMs = clampInterval(userMinutes) * 60_000L

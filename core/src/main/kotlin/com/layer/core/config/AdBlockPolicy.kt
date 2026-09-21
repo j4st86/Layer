@@ -5,7 +5,7 @@ package com.layer.core.config
  *
  * Upstream is the GPL-3.0 HostlistsRegistry `filter_1` feed; see THIRD_PARTY.md.
  * Layer is not affiliated with the list authors. Refresh cadence matches
- * [RuleSetCatalog] (3 days). Remote refresh is Wi‑Fi/Ethernet only so
+ * [RuleSetCatalog] (7 days). Remote refresh is Wi‑Fi/Ethernet only so
  * cellular is not charged ~4 MB; itdog lists still download on mobile.
  * A copy of [BUNDLED_VERSION] ships in assets/adblock if the feed is gone
  * on first enable. Refresh with scripts/fetch-adblock.sh.

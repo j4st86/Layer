@@ -76,17 +76,12 @@
     <string name="field_note">Note</string>
     <string name="field_note_placeholder">How it appears on Home</string>
     <string name="field_name">Name</string>
-    <string name="field_address">Address</string>
-    <string name="field_port">Port</string>
+    <string name="field_fingerprint">Fingerprint</string>
     <string name="no_servers_count">No servers</string>
 
     <plurals name="server_count">
         <item quantity="one">%d server</item>
         <item quantity="other">%d servers</item>
-    </plurals>
-    <plurals name="minutes_count">
-        <item quantity="one">%d minute</item>
-        <item quantity="other">%d minutes</item>
     </plurals>
 
     <string name="apps_title">Apps</string>
@@ -114,12 +109,11 @@
     <string name="settings_auto_select">Automatic server selection</string>
     <string name="settings_auto_select_on">Automatically pick the best available server.</string>
     <string name="settings_auto_select_need_two">You need at least 2 servers for automatic selection</string>
-    <string name="settings_check_every">Check servers every</string>
     <string name="settings_routing">Routing</string>
     <string name="settings_auto_lists">Automatic VPN list</string>
     <string name="settings_auto_lists_sub">YouTube, Telegram and other itdoginfo lists go through the VPS.</string>
     <string name="settings_ad_block">Block ads</string>
-    <string name="settings_ad_block_sub">Blocks ads and trackers at the DNS level. The list updates over Wi‑Fi every 3 days; on mobile the copy from the app is used.</string>
+    <string name="settings_ad_block_sub">Blocks ads and trackers at the DNS level. The list updates over Wi‑Fi every 7 days; on mobile the copy from the app is used.</string>
     <string name="settings_ipv6_sub">Turn this on if your network and server support it.</string>
     <string name="settings_stability">Stability</string>
     <string name="settings_logs">Logs and diagnostics</string>

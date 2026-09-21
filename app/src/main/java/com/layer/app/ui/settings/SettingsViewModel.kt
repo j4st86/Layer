@@ -122,22 +122,6 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
 
-    fun setAutoSelectInterval(minutes: Int) {
-        viewModelScope.launch {
-            val updated = snapshot.value.settings.copy(
-                autoSelectIntervalMinutes = AutoServerPolicy.clampInterval(minutes),
-            )
-            container.diagnostics.append(
-                "[AUTO] event=ui-interval minutes=${updated.autoSelectIntervalMinutes}",
-            )
-            container.repository.saveSettings(updated)
-            val connected = container.vpnController.status.value.state == VpnConnectionState.CONNECTED
-            if (updated.autoSelectServerEnabled && connected) {
-                container.autoServerSelector.startMonitoring()
-            }
-        }
-    }
-
     fun setAdBlock(enabled: Boolean) {
         viewModelScope.launch {
             val settings = snapshot.value.settings

@@ -1,5 +1,6 @@
 package com.layer.app.ui.home
 
+import android.content.ClipboardManager
 import android.content.Context
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +33,7 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.layer.app.R
+import com.layer.core.config.QrPayload
 import com.layer.core.config.VpnConnectionParser
 
 sealed interface AddConnectionUi {
@@ -54,6 +56,22 @@ fun qrScanUserMessage(context: Context, error: Throwable): String? {
     if (isQrScanUserDismissed(error)) return null
     if (error is ApiException) return context.getString(R.string.qr_failed)
     return error.message?.trim()?.ifBlank { null } ?: context.getString(R.string.qr_failed)
+}
+
+fun clipboardConnectionCandidate(context: Context): String? {
+    val manager = context.getSystemService(ClipboardManager::class.java) ?: return null
+    val clip = manager.primaryClip ?: return null
+    if (clip.itemCount <= 0) return null
+    val item = clip.getItemAt(0)
+    val text = item.coerceToText(context)?.toString().orEmpty().ifBlank {
+        item.uri?.toString().orEmpty()
+    }
+    return QrPayload.extract(text).takeIf { it.isNotBlank() }
+}
+
+fun parsedClipboardConnection(candidate: String?): String? {
+    if (candidate.isNullOrBlank()) return null
+    return VpnConnectionParser.parse(candidate).getOrNull()?.raw
 }
 
 fun scanConnectionQr(context: Context, onResult: (Result<String>) -> Unit) {

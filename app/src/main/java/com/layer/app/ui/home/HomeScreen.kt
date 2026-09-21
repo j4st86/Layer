@@ -232,8 +232,8 @@ fun HomeScreen() {
                     settings = snapshot.settings,
                     onRefreshSubscription = { id, done -> viewModel.refreshSubscription(id, done) },
                     onSelectServer = viewModel::selectServer,
-                    onUpdateServer = { id, name, address, port, sni, flow, fingerprint, alpn, note, done ->
-                        viewModel.updateServer(id, name, address, port, sni, flow, fingerprint, alpn, note, done)
+                    onUpdateServer = { id, note, fingerprint, done ->
+                        viewModel.updateServer(id, note, fingerprint, done)
                     },
                     onUpdateSubscriptionNote = { id, note, done ->
                         viewModel.updateSubscriptionNote(id, note, done)
@@ -247,6 +247,28 @@ fun HomeScreen() {
         }
     }
 
+    fun finishImport(payload: String, imported: Result<Unit>) {
+        when {
+            imported.isSuccess -> {
+                addUi = AddConnectionUi.Closed
+                scope.launch { snackbar.showSnackbar(addedConnectionMessage(context, payload)) }
+            }
+            imported.exceptionOrNull() is DuplicateConnectionException -> {
+                addUi = AddConnectionUi.Closed
+                scope.launch { snackbar.showSnackbar(DuplicateConnectionException.MESSAGE) }
+            }
+            else -> {
+                addUi = AddConnectionUi.Link(
+                    initial = payload,
+                    error = imported.exceptionOrNull()?.message,
+                )
+            }
+        }
+    }
+    fun importPayload(payload: String) {
+        viewModel.importConnection(payload) { imported -> finishImport(payload, imported) }
+    }
+
     when (val step = addUi) {
         AddConnectionUi.Closed -> Unit
         AddConnectionUi.Choose -> AddMethodChooser(
@@ -254,26 +276,7 @@ fun HomeScreen() {
                 addUi = AddConnectionUi.Closed
                 scanConnectionQr(context) { scanned ->
                     scanned.fold(
-                        onSuccess = { payload ->
-                            viewModel.importConnection(payload) { imported ->
-                                when {
-                                    imported.isSuccess -> {
-                                        scope.launch { snackbar.showSnackbar(addedConnectionMessage(context, payload)) }
-                                    }
-                                    imported.exceptionOrNull() is DuplicateConnectionException -> {
-                                        scope.launch {
-                                            snackbar.showSnackbar(DuplicateConnectionException.MESSAGE)
-                                        }
-                                    }
-                                    else -> {
-                                        addUi = AddConnectionUi.Link(
-                                            initial = payload,
-                                            error = imported.exceptionOrNull()?.message,
-                                        )
-                                    }
-                                }
-                            }
-                        },
+                        onSuccess = { payload -> importPayload(payload) },
                         onFailure = { error ->
                             val message = qrScanUserMessage(context, error) ?: return@fold
                             scope.launch { snackbar.showSnackbar(message) }
@@ -282,7 +285,16 @@ fun HomeScreen() {
                     )
                 }
             },
-            onLink = { addUi = AddConnectionUi.Link() },
+            onLink = {
+                val candidate = clipboardConnectionCandidate(context)
+                val parsed = parsedClipboardConnection(candidate)
+                if (parsed != null) {
+                    addUi = AddConnectionUi.Closed
+                    importPayload(parsed)
+                } else {
+                    addUi = AddConnectionUi.Link(initial = candidate.orEmpty())
+                }
+            },
             onDismiss = { addUi = AddConnectionUi.Closed },
         )
         is AddConnectionUi.Link -> AddLinkDialog(
@@ -291,18 +303,11 @@ fun HomeScreen() {
             onDismiss = { addUi = AddConnectionUi.Closed },
             onConfirm = { value, done ->
                 viewModel.importConnection(value) { result ->
-                    when {
-                        result.isSuccess -> {
-                            addUi = AddConnectionUi.Closed
-                            scope.launch { snackbar.showSnackbar(addedConnectionMessage(context, value)) }
-                            done(result)
-                        }
-                        result.exceptionOrNull() is DuplicateConnectionException -> {
-                            addUi = AddConnectionUi.Closed
-                            scope.launch { snackbar.showSnackbar(DuplicateConnectionException.MESSAGE) }
-                            done(Result.success(Unit))
-                        }
-                        else -> done(result)
+                    if (result.isSuccess || result.exceptionOrNull() is DuplicateConnectionException) {
+                        finishImport(value, result)
+                        done(Result.success(Unit))
+                    } else {
+                        done(result)
                     }
                 }
             },

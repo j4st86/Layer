@@ -76,20 +76,12 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
 
     fun updateServer(
         id: String,
-        name: String,
-        address: String,
-        port: Int,
-        sni: String,
-        flow: String,
-        fingerprint: String,
-        alpn: String,
         note: String,
+        fingerprint: String,
         onResult: (Result<Unit>) -> Unit = {},
     ) {
         viewModelScope.launch {
-            val result = container.repository.updateServer(
-                id, name, address, port, sni, flow, fingerprint, alpn, note,
-            )
+            val result = container.repository.updateServer(id, note, fingerprint)
             if (result.isSuccess) container.vpnController.reload()
             onResult(result)
         }
