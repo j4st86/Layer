@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Refresh the bundled DNS ad/tracker hostlist in app/src/main/assets/adblock.
 # Keep the file name and BUNDLED_VERSION in sync with AdBlockPolicy.
-# Runtime refresh uses the same 3-day cadence as scripts/fetch-rule-sets.sh.
+# Runtime refresh uses the same 7-day cadence as scripts/fetch-rule-sets.sh.
 # Source and license: THIRD_PARTY.md
 set -euo pipefail
 
@@ -9,8 +9,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEST="$ROOT/app/src/main/assets/adblock"
 mkdir -p "$DEST"
 
-URL="https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt"
-OUT="$DEST/dns-ad-filter.txt"
+URL="https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/pro.txt"
+OUT="$DEST/hagezi-pro.txt"
 
 echo "Downloading DNS ad hostlist"
 curl -fsSL -A "Mozilla/5.0 (Layer fetch-adblock)" -o "$OUT" "$URL"

@@ -5,17 +5,17 @@ Names in repository URLs identify the GPL source; they are not Layer branding.
 
 ## DNS ad and tracker hostlist
 
-Optional in-app toggle **Block ads**. Layer redistributes a snapshot of the
-GPL-3.0 DNS hostlist published as HostlistsRegistry `filter_1`:
+Optional in-app toggle **Block ads**. Layer redistributes a snapshot of
+Hagezi Multi PRO, a GPL-3.0 DNS hostlist:
 
-- Source repository: <https://github.com/AdguardTeam/AdguardSDNSFilter>
-- Compiled feed: <https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt>
-- License: [GNU GPL v3](https://github.com/AdguardTeam/AdguardSDNSFilter/blob/master/LICENSE)
-- Bundled snapshot: `app/src/main/assets/adblock/dns-ad-filter.txt`
+- Source repository: <https://github.com/hagezi/dns-blocklists>
+- Compiled feed: <https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/pro.txt>
+- License: [GNU GPL v3](https://github.com/hagezi/dns-blocklists/blob/main/LICENSE)
+- Bundled snapshot: `app/src/main/assets/adblock/hagezi-pro.txt`
 
-The file header (`! Title`, `! Homepage`) is kept as required when conveying
-a GPL work. The compiled list also draws on EasyList and EasyPrivacy
-([GPL-3.0 or CC BY-SA 3.0](https://easylist.to/pages/licence.html)).
+The file header (`! Title`, `! Homepage`, `! License`) is kept as required
+when conveying a GPL work. Some inputs in that list come from other authors
+with their own terms; GPL-3.0 covers the list as published by Hagezi.
 
 Refresh the snapshot with `./scripts/fetch-adblock.sh`.
 
@@ -38,17 +38,16 @@ Layer не связан с авторами списков ниже и не яв
 
 ## DNS-хостлист рекламы и трекеров
 
-Тумблер **Блокировка рекламы**. Снимок хостлиста GPL-3.0
-(HostlistsRegistry `filter_1`):
+Тумблер **Блокировка рекламы**. Снимок Hagezi Multi PRO, хостлист GPL-3.0:
 
-- Репозиторий: <https://github.com/AdguardTeam/AdguardSDNSFilter>
-- Лента: <https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt>
-- Лицензия: [GNU GPL v3](https://github.com/AdguardTeam/AdguardSDNSFilter/blob/master/LICENSE)
-- Снимок в APK: `app/src/main/assets/adblock/dns-ad-filter.txt`
+- Репозиторий: <https://github.com/hagezi/dns-blocklists>
+- Лента: <https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/pro.txt>
+- Лицензия: [GNU GPL v3](https://github.com/hagezi/dns-blocklists/blob/main/LICENSE)
+- Снимок в APK: `app/src/main/assets/adblock/hagezi-pro.txt`
 
-Шапка файла (`! Title`, `! Homepage`) сохраняется, как требует GPL.
-В сборку входят также правила EasyList и EasyPrivacy
-([GPL-3.0 или CC BY-SA 3.0](https://easylist.to/pages/licence.html)).
+Шапка файла (`! Title`, `! Homepage`, `! License`) сохраняется, как требует GPL.
+Часть исходных данных у других авторов со своими условиями; GPL-3.0 покрывает
+список в том виде, в каком его публикует Hagezi.
 
 Обновление снимка: `./scripts/fetch-adblock.sh`.
 

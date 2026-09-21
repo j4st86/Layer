@@ -158,7 +158,7 @@ class AdBlockDownloader(context: Context) {
         if (!local.exists()) return null
         return runCatching {
             local.bufferedReader().use { reader ->
-                repeat(12) {
+                repeat(24) {
                     val line = reader.readLine() ?: return@use null
                     if (line.startsWith("! Version:", ignoreCase = true)) {
                         return@use line.substringAfter(':').trim().ifBlank { null }
