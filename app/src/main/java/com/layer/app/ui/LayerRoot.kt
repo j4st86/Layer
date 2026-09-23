@@ -10,10 +10,12 @@ import androidx.compose.foundation.pager.PagerState
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.Block
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.rounded.Apps
+import androidx.compose.material.icons.rounded.Block
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Language
 import androidx.compose.material.icons.rounded.Settings
@@ -43,6 +45,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.layer.app.di.AppContainer
+import com.layer.app.ui.ads.AdsScreen
 import com.layer.app.ui.apps.AppsScreen
 import com.layer.app.ui.developer.DeveloperScreen
 import com.layer.app.ui.diagnostics.DiagnosticsScreen
@@ -63,6 +66,7 @@ object Routes {
     const val Home = "home"
     const val Apps = "apps"
     const val Domains = "domains"
+    const val Ads = "ads"
     const val Settings = "settings"
     const val Diagnostics = "diagnostics"
     const val Developer = "developer"
@@ -80,13 +84,14 @@ private fun rememberTabs(): List<Tab> = listOf(
     Tab(Routes.Home, stringResource(R.string.tab_home), Icons.Rounded.Home, Icons.Outlined.Home),
     Tab(Routes.Apps, stringResource(R.string.tab_apps), Icons.Rounded.Apps, Icons.Outlined.Apps),
     Tab(Routes.Domains, stringResource(R.string.tab_domains), Icons.Rounded.Language, Icons.Outlined.Language),
+    Tab(Routes.Ads, stringResource(R.string.tab_ads), Icons.Rounded.Block, Icons.Outlined.Block),
     Tab(Routes.Settings, stringResource(R.string.tab_more), Icons.Rounded.Settings, Icons.Outlined.Settings),
 )
 
 @Composable
 fun LayerRoot(container: AppContainer) {
     val navController = rememberNavController()
-    val pagerState = rememberPagerState(pageCount = { 4 })
+    val pagerState = rememberPagerState(pageCount = { 5 })
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
@@ -200,6 +205,7 @@ private fun MainPager(
             0 -> HomeScreen()
             1 -> AppsScreen()
             2 -> DomainsScreen()
+            3 -> AdsScreen()
             else -> SettingsScreen()
         }
     }

@@ -1,5 +1,9 @@
 package com.layer.app.box.libbox
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.LinkProperties
@@ -10,7 +14,9 @@ import android.net.VpnService
 import android.os.Build
 import android.os.Process
 import android.system.OsConstants
+import androidx.core.content.ContextCompat
 import com.layer.app.box.BoxHost
+import com.layer.core.config.UidPackageCache
 import com.layer.app.vpn.AutoServerSelector
 import com.layer.app.vpn.UnderlyingDns
 import io.nekohasekai.libbox.BridgeOptions
@@ -41,6 +47,27 @@ internal class SingBoxPlatform(
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var protectCount = 0
     private var lookupCount = 0
+    private val uidPackages = UidPackageCache()
+    private val packageReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            uidPackages.clear()
+        }
+    }
+
+    init {
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addAction(Intent.ACTION_PACKAGE_REMOVED)
+            addAction(Intent.ACTION_PACKAGE_REPLACED)
+            addDataScheme("package")
+        }
+        ContextCompat.registerReceiver(
+            vpn,
+            packageReceiver,
+            filter,
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+    }
 
     @Volatile
     var underlyingNetwork: Network? = null
@@ -79,12 +106,17 @@ internal class SingBoxPlatform(
             InetSocketAddress(destinationAddress, destinationPort),
         )
         if (uid == Process.INVALID_UID) error("android: connection owner not found")
-        val packages = vpn.packageManager.getPackagesForUid(uid)
+        val packages = uidPackages.packages(uid) { vpn.packageManager.getPackagesForUid(it) }
         return ConnectionOwner().apply {
             userId = uid
-            userName = packages?.firstOrNull().orEmpty()
-            setAndroidPackageNames(StringArray(packages?.toList().orEmpty()))
+            userName = packages.firstOrNull().orEmpty()
+            setAndroidPackageNames(StringArray(packages))
         }
+    }
+
+    fun close() {
+        runCatching { vpn.unregisterReceiver(packageReceiver) }
+        uidPackages.clear()
     }
 
     override fun startDefaultInterfaceMonitor(listener: InterfaceUpdateListener) {

@@ -75,7 +75,7 @@ object DiagnosticReport {
                 appendLine("Fingerprint: ${snapshot.settings.server.fingerprint}")
                 appendLine("ALPN: ${snapshot.settings.server.alpn}")
                 appendLine("Automatic lists: ${snapshot.settings.automaticRuleSetEnabled}")
-                appendLine("Ad block: ${snapshot.settings.adBlockEnabled}")
+                appendLine("Ad block apps: ${snapshot.adBlockApps.size}")
                 appendLine("Ad block bundled: ${AdBlockPolicy.BUNDLED_VERSION}")
                 appendLine("Ad block file: ${container.adBlockDownloader.debugSnapshot()}")
                 appendLine("Auto select server: ${snapshot.settings.autoSelectServerEnabled}")

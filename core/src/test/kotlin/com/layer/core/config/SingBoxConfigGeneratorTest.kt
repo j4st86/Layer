@@ -402,15 +402,16 @@ class SingBoxConfigGeneratorTest {
     }
 
     @Test
-    fun adBlockRejectsWhenEnabledAndFilePresent() {
+    fun adBlockRejectsSelectedAppsWhenFilePresent() {
         val json = SingBoxConfigGenerator.generate(
             uuid = sampleUuid,
-            settings = sampleSettings.copy(adBlockEnabled = true),
+            settings = sampleSettings.copy(adBlockEnabled = false),
             appRules = emptyList(),
             domainRules = listOf(
                 DomainRoutingRule("example.ru", DomainRoutingMode.DIRECT),
             ),
             ownPackageName = "com.layer.app",
+            adBlockPackages = listOf("org.telegram.messenger"),
             adBlockRuleSetPath = "/data/adblock/dns-ad-filter.json",
         ).json
         val root = Json.parseToJsonElement(json).jsonObject
@@ -432,6 +433,10 @@ class SingBoxConfigGeneratorTest {
         assertTrue(userDirect >= 0)
         assertTrue(adsReject > userDirect)
         assertTrue(automatic > adsReject)
+        val routeAds = routeRules[adsReject].jsonObject
+        assertTrue(routeAds["package_name"]!!.jsonArray.any {
+            it.jsonPrimitive.content == "org.telegram.messenger"
+        })
 
         val dnsAds = root["dns"]!!.jsonObject["rules"]!!.jsonArray.first { rule ->
             val obj = rule.jsonObject
@@ -439,13 +444,18 @@ class SingBoxConfigGeneratorTest {
                 obj["rule_set"]?.toString().orEmpty().contains("rs-ads")
         }.jsonObject
         assertEquals("reject", dnsAds["action"]!!.jsonPrimitive.content)
+        assertTrue(dnsAds["package_name"]!!.jsonArray.any {
+            it.jsonPrimitive.content == "org.telegram.messenger"
+        })
+        val errors = SingBoxSchema.assertValid(json)
+        assertTrue(errors.joinToString("\n"), errors.isEmpty())
     }
 
     @Test
-    fun adBlockOmittedWhenDisabledEvenIfFilePresent() {
+    fun adBlockOmittedWhenNoAppsSelected() {
         val json = SingBoxConfigGenerator.generate(
             uuid = sampleUuid,
-            settings = sampleSettings.copy(adBlockEnabled = false),
+            settings = sampleSettings.copy(adBlockEnabled = true),
             appRules = emptyList(),
             domainRules = emptyList(),
             ownPackageName = "com.layer.app",
@@ -456,13 +466,14 @@ class SingBoxConfigGeneratorTest {
     }
 
     @Test
-    fun adBlockOmittedWhenEnabledButFileMissing() {
+    fun adBlockOmittedWhenAppsSelectedButFileMissing() {
         val json = SingBoxConfigGenerator.generate(
             uuid = sampleUuid,
-            settings = sampleSettings.copy(adBlockEnabled = true),
+            settings = sampleSettings,
             appRules = emptyList(),
             domainRules = emptyList(),
             ownPackageName = "com.layer.app",
+            adBlockPackages = listOf("org.telegram.messenger"),
             adBlockRuleSetPath = null,
         ).json
         assertFalse(json.contains("rs-ads"))

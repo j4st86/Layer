@@ -71,6 +71,7 @@ class LibboxSession(
         runCatching { commandServer.closeService() }
         runCatching { commandServer.close() }
         tun.close()
+        platform.close()
         logClient = null
     }
 

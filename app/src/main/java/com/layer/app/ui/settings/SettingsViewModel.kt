@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.layer.app.BuildConfig
-import com.layer.app.data.AdBlockDownloader
 import com.layer.app.data.LayerSnapshot
 import com.layer.app.data.UpdateCheckResult
 import com.layer.app.di.AppContainer
@@ -30,7 +29,7 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
     val snapshot: StateFlow<LayerSnapshot> = container.repository.snapshot.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
-        LayerSnapshot(LayerSettings(), emptyList(), emptyList(), false),
+        LayerSnapshot(LayerSettings(), emptyList(), emptyList(), emptyList(), false),
     )
     val installedVersion: String = BuildConfig.VERSION_NAME
 
@@ -119,19 +118,6 @@ class SettingsViewModel(private val container: AppContainer) : ViewModel() {
             } else {
                 container.autoServerSelector.stopMonitoring()
             }
-        }
-    }
-
-    fun setAdBlock(enabled: Boolean) {
-        viewModelScope.launch {
-            val settings = snapshot.value.settings
-            container.diagnostics.append("[ADS] event=ui-toggle enabled=$enabled")
-            container.repository.saveSettings(settings.copy(adBlockEnabled = enabled))
-            if (enabled) {
-                val fetched = container.adBlockDownloader.ensureCopy(network = null)
-                container.diagnostics.append(AdBlockDownloader.logLine(fetched))
-            }
-            container.vpnController.reload()
         }
     }
 

@@ -1,12 +1,11 @@
-package com.layer.app.ui.apps
+package com.layer.app.ui.ads
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.layer.app.data.InstalledApp
 import com.layer.app.di.AppContainer
-import com.layer.core.model.AppRoutingMode
-import com.layer.core.model.AppRoutingRule
+import com.layer.core.model.AdBlockApp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -14,21 +13,21 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class AppsViewModel(private val container: AppContainer) : ViewModel() {
+class AdsViewModel(private val container: AppContainer) : ViewModel() {
     private val pickerQuery = MutableStateFlow("")
     private val installed = MutableStateFlow<List<InstalledApp>>(emptyList())
-    private val _undo = MutableStateFlow<AppRoutingRule?>(null)
-    val undo: StateFlow<AppRoutingRule?> = _undo
+    private val _undo = MutableStateFlow<AdBlockApp?>(null)
+    val undo: StateFlow<AdBlockApp?> = _undo
 
-    val rules: StateFlow<List<AppRoutingRule>> = container.repository.appRules.stateIn(
+    val apps: StateFlow<List<AdBlockApp>> = container.repository.adBlockApps.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
         emptyList(),
     )
 
-    val pickerApps: StateFlow<List<InstalledApp>> = combine(installed, pickerQuery, rules) { apps, q, current ->
+    val pickerApps: StateFlow<List<InstalledApp>> = combine(installed, pickerQuery, apps) { all, q, current ->
         val added = current.mapTo(HashSet()) { it.packageName }
-        apps.filter { app ->
+        all.filter { app ->
             app.packageName !in added &&
                 (q.isBlank() || app.label.contains(q, ignoreCase = true) || app.packageName.contains(q, ignoreCase = true))
         }
@@ -50,33 +49,24 @@ class AppsViewModel(private val container: AppContainer) : ViewModel() {
         pickerQuery.value = ""
     }
 
-    fun setMode(app: InstalledApp, mode: AppRoutingMode) {
+    fun add(app: InstalledApp) {
         viewModelScope.launch {
-            container.repository.upsertAppRule(
-                AppRoutingRule(app.packageName, app.label, mode),
-            )
+            container.repository.upsertAdBlockApp(AdBlockApp(app.packageName, app.label))
             container.vpnController.reload()
         }
     }
 
-    fun setMode(rule: AppRoutingRule, mode: AppRoutingMode) {
+    fun remove(app: AdBlockApp) {
         viewModelScope.launch {
-            container.repository.upsertAppRule(rule.copy(mode = mode))
-            container.vpnController.reload()
-        }
-    }
-
-    fun remove(rule: AppRoutingRule) {
-        viewModelScope.launch {
-            _undo.value = container.repository.removeAppRule(rule.packageName)
+            _undo.value = container.repository.removeAdBlockApp(app.packageName)
             container.vpnController.reload()
         }
     }
 
     fun undoRemove() {
-        val rule = _undo.value ?: return
+        val app = _undo.value ?: return
         viewModelScope.launch {
-            container.repository.restoreAppRule(rule)
+            container.repository.restoreAdBlockApp(app)
             _undo.value = null
             container.vpnController.reload()
         }
@@ -89,7 +79,7 @@ class AppsViewModel(private val container: AppContainer) : ViewModel() {
     companion object {
         fun factory(container: AppContainer) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
-            override fun <T : ViewModel> create(modelClass: Class<T>): T = AppsViewModel(container) as T
+            override fun <T : ViewModel> create(modelClass: Class<T>): T = AdsViewModel(container) as T
         }
     }
 }

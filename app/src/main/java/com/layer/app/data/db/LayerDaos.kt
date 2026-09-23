@@ -64,6 +64,18 @@ interface AppRuleDao {
 }
 
 @Dao
+interface AdBlockAppDao {
+    @Query("SELECT * FROM ad_block_apps ORDER BY appName COLLATE NOCASE")
+    fun observeAll(): Flow<List<AdBlockAppEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(entities: List<AdBlockAppEntity>)
+
+    @Query("DELETE FROM ad_block_apps")
+    suspend fun deleteAll()
+}
+
+@Dao
 interface DomainRuleDao {
     @Query("SELECT * FROM domain_rules ORDER BY domain COLLATE NOCASE")
     fun observeAll(): Flow<List<DomainRuleEntity>>

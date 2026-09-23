@@ -74,6 +74,7 @@ object SingBoxConfigGenerator {
         resolvedServerIp: String? = null,
         localRuleSets: Map<String, String> = emptyMap(),
         remoteRuleSetFallback: Boolean = true,
+        adBlockPackages: List<String> = emptyList(),
         adBlockRuleSetPath: String? = null,
         logLevel: String = "info",
     ): ConfigGenerationResult {
@@ -129,8 +130,9 @@ object SingBoxConfigGenerator {
             localRuleSets = localRuleSets,
             remoteFallback = remoteRuleSetFallback,
         )
+        val adPackages = adBlockPackages.filter { it.isNotBlank() }.distinct()
         val adBlockPath = adBlockRuleSetPath?.takeIf {
-            settings.adBlockEnabled && it.isNotBlank()
+            adPackages.isNotEmpty() && it.isNotBlank()
         }
         val route = buildRoute(
             server = server,
@@ -143,6 +145,7 @@ object SingBoxConfigGenerator {
             automaticTags = automaticTags,
             localRuleSets = localRuleSets,
             remoteRuleSetFallback = remoteRuleSetFallback,
+            adBlockPackages = if (adBlockPath != null) adPackages else emptyList(),
             adBlockPath = adBlockPath,
         )
         // 1.14 dropped download_detour; remote rule-sets download through
@@ -157,7 +160,7 @@ object SingBoxConfigGenerator {
                 vpnDomains = vpnDomains,
                 automaticTags = automaticTags,
                 ipv6Enabled = settings.ipv6Enabled,
-                adBlockEnabled = adBlockPath != null,
+                adBlockPackages = if (adBlockPath != null) adPackages else emptyList(),
             ),
             inbounds = listOf(buildTun(settings.ipv6Enabled)),
             outbounds = listOf(
@@ -196,7 +199,7 @@ object SingBoxConfigGenerator {
         vpnDomains: List<String>,
         automaticTags: List<String>,
         ipv6Enabled: Boolean,
-        adBlockEnabled: Boolean,
+        adBlockPackages: List<String>,
     ): DnsOptions {
         val rules = buildList {
             add(
@@ -215,9 +218,10 @@ object SingBoxConfigGenerator {
                     ),
                 )
             }
-            if (adBlockEnabled) {
+            if (adBlockPackages.isNotEmpty()) {
                 add(
                     DnsRule(
+                        packageName = adBlockPackages,
                         ruleSet = listOf(AdBlockPolicy.TAG),
                         action = "reject",
                     ),
@@ -366,6 +370,7 @@ object SingBoxConfigGenerator {
         automaticTags: List<String>,
         localRuleSets: Map<String, String>,
         remoteRuleSetFallback: Boolean,
+        adBlockPackages: List<String>,
         adBlockPath: String?,
     ): RouteOptions {
         val ruleSets = buildList {
@@ -466,9 +471,17 @@ object SingBoxConfigGenerator {
                     ),
                 )
             }
-            // 5. DNS ad hostlist (user domain DIRECT still wins as a whitelist)
-            if (!adBlockPath.isNullOrBlank()) {
-                add(RouteRule(ruleSet = listOf(AdBlockPolicy.TAG), action = "reject"))
+            // 5. DNS ad hostlist, only for apps the user added.
+            // package_name is checked before the rule-set, so other apps
+            // never walk the list. User domain DIRECT still wins above.
+            if (adBlockPackages.isNotEmpty() && !adBlockPath.isNullOrBlank()) {
+                add(
+                    RouteRule(
+                        packageName = adBlockPackages,
+                        ruleSet = listOf(AdBlockPolicy.TAG),
+                        action = "reject",
+                    ),
+                )
             }
             // 6. Automatic rule-set
             if (automaticTags.isNotEmpty()) {

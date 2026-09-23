@@ -376,11 +376,12 @@ internal class LayerBoxService(
     )
 
     private suspend fun prepareLists(): PreparedLists {
-        val settings = container.repository.currentSnapshot().settings
+        val snapshot = container.repository.currentSnapshot()
+        val settings = snapshot.settings
         val connectivity = vpn.getSystemService(ConnectivityManager::class.java)
         val network = UnderlyingDns.pickUnderlyingNetwork(connectivity)
         dbg(
-            "[RULE] event=prepare ads=${settings.adBlockEnabled} " +
+            "[RULE] event=prepare ads=${snapshot.adBlockApps.size} " +
                 "auto=${settings.automaticRuleSetEnabled}",
         )
         return supervisorScope {
@@ -393,8 +394,8 @@ internal class LayerBoxService(
                 }
             }
             val ads = async {
-                if (!settings.adBlockEnabled) {
-                    dbg("[ADS] event=skip reason=disabled")
+                if (snapshot.adBlockApps.isEmpty()) {
+                    dbg("[ADS] event=skip reason=no-apps")
                     null
                 } else {
                     fetchAdBlock(network)

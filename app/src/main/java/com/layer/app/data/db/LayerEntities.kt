@@ -49,3 +49,9 @@ data class DomainRuleEntity(
     @PrimaryKey val domain: String,
     val mode: String,
 )
+
+@Entity(tableName = "ad_block_apps")
+data class AdBlockAppEntity(
+    @PrimaryKey val packageName: String,
+    val appName: String,
+)

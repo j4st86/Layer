@@ -20,7 +20,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     val snapshot: StateFlow<LayerSnapshot> = container.repository.snapshot.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
-        LayerSnapshot(LayerSettings(), emptyList(), emptyList(), false),
+        LayerSnapshot(LayerSettings(), emptyList(), emptyList(), emptyList(), false),
     )
     val status: StateFlow<VpnUiStatus> = container.vpnController.status
 

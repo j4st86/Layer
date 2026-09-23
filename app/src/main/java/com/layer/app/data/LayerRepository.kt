@@ -15,6 +15,7 @@ import com.layer.core.config.VlessLinkParser
 import com.layer.core.config.VpnConnectionInput
 import com.layer.core.config.VpnConnectionParser
 import com.layer.core.i18n.copy
+import com.layer.core.model.AdBlockApp
 import com.layer.core.model.AppRoutingRule
 import com.layer.core.model.DomainRoutingRule
 import com.layer.core.model.LayerSettings
@@ -43,6 +44,7 @@ data class LayerSnapshot(
     val settings: LayerSettings,
     val appRules: List<AppRoutingRule>,
     val domainRules: List<DomainRoutingRule>,
+    val adBlockApps: List<AdBlockApp>,
     val hasUuid: Boolean,
 )
 
@@ -57,9 +59,10 @@ class LayerRepository(
     val settings: Flow<LayerSettings> = dataStore.settings
     val appRules: Flow<List<AppRoutingRule>> = dataStore.appRules
     val domainRules: Flow<List<DomainRoutingRule>> = dataStore.domainRules
+    val adBlockApps: Flow<List<AdBlockApp>> = dataStore.adBlockApps
 
-    val snapshot: Flow<LayerSnapshot> = combine(settings, appRules, domainRules) { s, apps, domains ->
-        LayerSnapshot(s, apps, domains, credentials.hasUuid(s.activeServerId))
+    val snapshot: Flow<LayerSnapshot> = combine(settings, appRules, domainRules, adBlockApps) { s, apps, domains, ads ->
+        LayerSnapshot(s, apps, domains, ads, credentials.hasUuid(s.activeServerId))
     }
 
     suspend fun currentSnapshot(): LayerSnapshot = snapshot.first()
@@ -270,6 +273,22 @@ class LayerRepository(
 
     suspend fun restoreAppRule(rule: AppRoutingRule) = upsertAppRule(rule)
 
+    suspend fun upsertAdBlockApp(app: AdBlockApp) {
+        val current = dataStore.adBlockApps.first().toMutableList()
+        val index = current.indexOfFirst { it.packageName == app.packageName }
+        if (index >= 0) current[index] = app else current += app
+        dataStore.saveAdBlockApps(current.sortedBy { it.appName.lowercase() })
+    }
+
+    suspend fun removeAdBlockApp(packageName: String): AdBlockApp? {
+        val current = dataStore.adBlockApps.first()
+        val removed = current.firstOrNull { it.packageName == packageName }
+        dataStore.saveAdBlockApps(current.filterNot { it.packageName == packageName })
+        return removed
+    }
+
+    suspend fun restoreAdBlockApp(app: AdBlockApp) = upsertAdBlockApp(app)
+
     suspend fun recommendedAppRulesToAdd(): List<AppRoutingRule> = withContext(Dispatchers.IO) {
         val existing = dataStore.appRules.first().map { it.packageName }.toSet()
         val installedLabels = buildMap {
@@ -337,6 +356,7 @@ class LayerRepository(
             resolvedServerIp = resolvedServerIp,
             localRuleSets = localRuleSets,
             remoteRuleSetFallback = remoteRuleSetFallback,
+            adBlockPackages = snap.adBlockApps.map { it.packageName },
             adBlockRuleSetPath = adBlockRuleSetPath,
             logLevel = "info",
         )

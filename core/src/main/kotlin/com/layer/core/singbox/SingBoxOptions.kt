@@ -65,6 +65,7 @@ data class HttpsDnsServer(
 data class DnsRule(
     val domain: List<String>? = null,
     @SerialName("domain_suffix") val domainSuffix: List<String>? = null,
+    @SerialName("package_name") val packageName: List<String>? = null,
     @SerialName("rule_set") val ruleSet: List<String>? = null,
     val action: String,
     val server: String? = null,

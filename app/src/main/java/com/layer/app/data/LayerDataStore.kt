@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.room.withTransaction
+import com.layer.app.data.db.AdBlockAppEntity
 import com.layer.app.data.db.AppRuleEntity
 import com.layer.app.data.db.DomainRuleEntity
 import com.layer.app.data.db.LayerDatabase
@@ -15,6 +16,7 @@ import com.layer.app.data.db.ServerEntity
 import com.layer.app.data.db.SettingsEntity
 import com.layer.app.data.db.SubscriptionEntity
 import com.layer.core.config.AutoServerPolicy
+import com.layer.core.model.AdBlockApp
 import com.layer.core.model.AppRoutingMode
 import com.layer.core.model.AppRoutingRule
 import com.layer.core.model.DomainRoutingMode
@@ -61,6 +63,10 @@ class LayerDataStore(private val context: Context) {
         .map { rows -> rows.map { it.toModel() } }
         .onStart { importFromDataStoreIfEmpty() }
 
+    val adBlockApps: Flow<List<AdBlockApp>> = db.adBlockApps().observeAll()
+        .map { rows -> rows.map { it.toModel() } }
+        .onStart { importFromDataStoreIfEmpty() }
+
     suspend fun saveSettings(settings: LayerSettings) {
         importFromDataStoreIfEmpty()
         db.withTransaction {
@@ -88,11 +94,20 @@ class LayerDataStore(private val context: Context) {
         }
     }
 
+    suspend fun saveAdBlockApps(apps: List<AdBlockApp>) {
+        importFromDataStoreIfEmpty()
+        db.withTransaction {
+            db.adBlockApps().deleteAll()
+            db.adBlockApps().upsertAll(apps.map { it.toEntity() })
+        }
+    }
+
     suspend fun resetRouting() {
         importFromDataStoreIfEmpty()
         db.withTransaction {
             db.appRules().deleteAll()
             db.domainRules().deleteAll()
+            db.adBlockApps().deleteAll()
         }
     }
 
@@ -102,6 +117,7 @@ class LayerDataStore(private val context: Context) {
             db.subscriptions().deleteAll()
             db.appRules().deleteAll()
             db.domainRules().deleteAll()
+            db.adBlockApps().deleteAll()
             db.settings().upsert(SettingsEntity())
         }
         context.legacyLayerStore.updateData { emptyPreferences() }
@@ -225,6 +241,16 @@ class LayerDataStore(private val context: Context) {
     private fun DomainRoutingRule.toEntity(): DomainRuleEntity = DomainRuleEntity(
         domain = domain,
         mode = mode.name,
+    )
+
+    private fun AdBlockApp.toEntity(): AdBlockAppEntity = AdBlockAppEntity(
+        packageName = packageName,
+        appName = appName,
+    )
+
+    private fun AdBlockAppEntity.toModel(): AdBlockApp = AdBlockApp(
+        packageName = packageName,
+        appName = appName,
     )
 
     private fun DomainRuleEntity.toModel(): DomainRoutingRule = DomainRoutingRule(

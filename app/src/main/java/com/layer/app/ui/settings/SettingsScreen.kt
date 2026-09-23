@@ -179,13 +179,6 @@ fun SettingsScreen() {
                     )
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     SettingSwitch(
-                        title = stringResource(R.string.settings_ad_block),
-                        subtitle = stringResource(R.string.settings_ad_block_sub),
-                        checked = settings.adBlockEnabled,
-                        onChecked = viewModel::setAdBlock,
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                    SettingSwitch(
                         title = "IPv6",
                         subtitle = stringResource(R.string.settings_ipv6_sub),
                         checked = settings.ipv6Enabled,

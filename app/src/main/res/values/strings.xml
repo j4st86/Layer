@@ -4,6 +4,7 @@
     <string name="tab_home">Home</string>
     <string name="tab_apps">Apps</string>
     <string name="tab_domains">Domains</string>
+    <string name="tab_ads">Ads</string>
     <string name="tab_more">More</string>
     <string name="navi_one_layer_left">1 more layer</string>
 
@@ -95,6 +96,13 @@
     <string name="rule_removed">Rule removed</string>
     <string name="delete_rule">Delete rule</string>
 
+    <string name="ads_title">Ad blocking</string>
+    <string name="ads_empty_title">No apps yet</string>
+    <string name="ads_empty_body">The ad list stays off until you add an app. Only those apps are checked against it.</string>
+    <string name="ads_add">Add app</string>
+    <string name="ads_help_title">Ad blocking</string>
+    <string name="ads_help_body">Add the apps where ads should be blocked. Their requests are checked against the list; other apps are not.\n\nWith an empty list the ad list is not loaded, so it does not use the battery.\n\nThe list updates over Wi‑Fi every 7 days. On mobile the copy from the app is used.</string>
+
     <string name="domains_title">Domains</string>
     <string name="domains_empty_title">No custom domains yet</string>
     <string name="domains_empty_body">Add a domain and choose how its traffic is filtered.</string>
@@ -112,8 +120,6 @@
     <string name="settings_routing">Routing</string>
     <string name="settings_auto_lists">Automatic VPN list</string>
     <string name="settings_auto_lists_sub">YouTube, Telegram and other itdoginfo lists go through the VPS.</string>
-    <string name="settings_ad_block">Block ads</string>
-    <string name="settings_ad_block_sub">Blocks ads and trackers at the DNS level. The list updates over Wi‑Fi every 7 days; on mobile the copy from the app is used.</string>
     <string name="settings_ipv6_sub">Turn this on if your network and server support it.</string>
     <string name="settings_stability">Stability</string>
     <string name="settings_logs">Logs and diagnostics</string>
@@ -134,13 +140,13 @@
     <string name="report_failed">Could not send the report</string>
     <string name="settings_reset">Reset</string>
     <string name="settings_reset_rules">Reset rules</string>
-    <string name="settings_reset_rules_sub">Deletes app and domain rules</string>
+    <string name="settings_reset_rules_sub">Deletes app, domain, and ad-block rules</string>
     <string name="settings_reset_rules_button">Reset routing rules</string>
     <string name="settings_reset_all">Reset everything</string>
     <string name="settings_reset_all_sub">Disconnects the VPN and deletes the key and settings</string>
     <string name="settings_reset_all_button">Reset all settings</string>
     <string name="settings_reset_rules_title">Reset rules?</string>
-    <string name="settings_reset_rules_body">Apps and domains will return to smart routing.</string>
+    <string name="settings_reset_rules_body">Apps and domains return to smart routing. The ad-block list is cleared.</string>
     <string name="rules_reset">Rules reset</string>
     <string name="always_on_info_body">This is an Android system mode. The app cannot turn it on by itself.\n\nIf you enable Always-on VPN for Layer, the system will bring the connection back after a reboot and will not let it simply disappear when the app is unloaded from memory.</string>
     <string name="settings_reset_all_title">Reset all settings?</string>

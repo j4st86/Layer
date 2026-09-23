@@ -4,6 +4,7 @@
     <string name="tab_home">Главная</string>
     <string name="tab_apps">Приложения</string>
     <string name="tab_domains">Домены</string>
+    <string name="tab_ads">Реклама</string>
     <string name="tab_more">Ещё</string>
     <string name="navi_one_layer_left">ещё 1 слой</string>
 
@@ -97,6 +98,13 @@
     <string name="rule_removed">Правило удалено</string>
     <string name="delete_rule">Удалить правило</string>
 
+    <string name="ads_title">Блокировка рекламы</string>
+    <string name="ads_empty_title">Приложений пока нет</string>
+    <string name="ads_empty_body">Список рекламы выключен, пока вы не добавите приложение. Проверяются только добавленные.</string>
+    <string name="ads_add">Добавить приложение</string>
+    <string name="ads_help_title">Блокировка рекламы</string>
+    <string name="ads_help_body">Добавьте приложения, в которых нужно убирать рекламу. Их запросы сверяются со списком, остальные приложения — нет.\n\nЕсли список пуст, список рекламы не загружается и не тратит батарею.\n\nСписок обновляется по Wi‑Fi каждые 7 дней. В мобильной сети берётся копия из приложения.</string>
+
     <string name="domains_title">Домены</string>
     <string name="domains_empty_title">Своих доменов пока нет</string>
     <string name="domains_empty_body">Добавьте домен и укажите способ фильтрации его трафика.</string>
@@ -114,8 +122,6 @@
     <string name="settings_routing">Маршрутизация</string>
     <string name="settings_auto_lists">Автоматический список VPN</string>
     <string name="settings_auto_lists_sub">YouTube, Telegram и другие списки itdoginfo идут через VPS.</string>
-    <string name="settings_ad_block">Блокировка рекламы</string>
-    <string name="settings_ad_block_sub">Отсекает рекламу и трекеры на уровне DNS. Список обновляется по Wi‑Fi каждые 7 дней; в мобильной сети берётся копия из приложения.</string>
     <string name="settings_ipv6_sub">Включайте, если сеть и сервер его поддерживают.</string>
     <string name="settings_stability">Стабильность</string>
     <string name="settings_logs">Логи и диагностика</string>
@@ -136,13 +142,13 @@
     <string name="report_failed">Не удалось отправить отчёт</string>
     <string name="settings_reset">Сброс</string>
     <string name="settings_reset_rules">Сбросить правила</string>
-    <string name="settings_reset_rules_sub">Удалит правила приложений и доменов</string>
+    <string name="settings_reset_rules_sub">Удалит правила приложений, доменов и блокировки рекламы</string>
     <string name="settings_reset_rules_button">Сбросить правила маршрутизации</string>
     <string name="settings_reset_all">Сбросить всё</string>
     <string name="settings_reset_all_sub">Отключит VPN и удалит ключ и настройки</string>
     <string name="settings_reset_all_button">Сбросить все настройки</string>
     <string name="settings_reset_rules_title">Сбросить правила?</string>
-    <string name="settings_reset_rules_body">Приложения и домены вернутся к умной маршрутизации.</string>
+    <string name="settings_reset_rules_body">Приложения и домены вернутся к умной маршрутизации. Список блокировки рекламы очистится.</string>
     <string name="rules_reset">Правила сброшены</string>
     <string name="always_on_info_body">Это системный режим Android, приложение само его не включает.\n\nЕсли включить «Всегда включённый VPN» для Layer, система поднимет соединение после перезагрузки и не даст ему просто исчезнуть, когда приложение выгрузится из памяти.</string>
     <string name="settings_reset_all_title">Сбросить все настройки?</string>
