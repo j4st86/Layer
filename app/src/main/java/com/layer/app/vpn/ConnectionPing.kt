@@ -64,6 +64,14 @@ class ConnectionPing(
             // EPERM on Pixel / Android 15+.
             val ms = VlessTcpProbe.measureMedian(server, null, diagnostics, "[PING]")
             _status.value = ConnectionPingUi(latencyMs = ms, probing = false)
+            if (ms == null && (reason == "connected" || reason == "reconnect")) {
+                diagnostics.append(
+                    "[PING] event=unreachable server=${server.visibleName()} trigger=$reason",
+                )
+                vpnController.reportServerUnreachable()
+            } else if (ms != null) {
+                vpnController.noteServerReachable()
+            }
         }
     }
 }

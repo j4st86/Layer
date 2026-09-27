@@ -209,6 +209,24 @@ object SingBoxConfigGenerator {
                     server = "dns-local",
                 ),
             )
+            // FCM reconnects to mtalk.google.com after every radio handoff.
+            // dns-direct is DoH to 8.8.8.8:443, which times out on that handoff
+            // (and on networks that do not reach 8.8.8.8), so the new session
+            // never opens. The phone resolver still answers.
+            add(
+                DnsRule(
+                    packageName = PushDirectPackages.packages,
+                    action = "route",
+                    server = "dns-local",
+                ),
+            )
+            add(
+                DnsRule(
+                    domain = listOf("mtalk.google.com"),
+                    action = "route",
+                    server = "dns-local",
+                ),
+            )
             if (directDomains.isNotEmpty()) {
                 add(
                     DnsRule(

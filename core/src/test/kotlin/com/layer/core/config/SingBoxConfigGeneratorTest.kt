@@ -215,6 +215,31 @@ class SingBoxConfigGeneratorTest {
     }
 
     @Test
+    fun playServicesDnsUsesThePhoneResolver() {
+        val json = SingBoxConfigGenerator.generate(
+            uuid = sampleUuid,
+            settings = sampleSettings,
+            appRules = emptyList(),
+            domainRules = emptyList(),
+            ownPackageName = "com.layer.app",
+        ).json
+        val rules = Json.parseToJsonElement(json).jsonObject["dns"]!!
+            .jsonObject["rules"]!!.jsonArray
+        val gms = rules.first { rule ->
+            rule.jsonObject["package_name"]?.toString().orEmpty()
+                .contains("com.google.android.gms") &&
+                rule.jsonObject["server"]?.jsonPrimitive?.content == "dns-local"
+        }.jsonObject
+        assertTrue(gms["package_name"]!!.jsonArray.any {
+            it.jsonPrimitive.content == "com.google.android.gsf"
+        })
+        val mtalk = rules.first { rule ->
+            rule.jsonObject["domain"]?.toString().orEmpty().contains("mtalk.google.com")
+        }.jsonObject
+        assertEquals("dns-local", mtalk["server"]!!.jsonPrimitive.content)
+    }
+
+    @Test
     fun vpnListDnsGoesDirectNotThroughVision() {
         val json = SingBoxConfigGenerator.generate(
             uuid = sampleUuid,

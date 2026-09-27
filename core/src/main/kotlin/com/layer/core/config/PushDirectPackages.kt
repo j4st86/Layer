@@ -5,9 +5,10 @@ package com.layer.core.config
  * `mtalk.google.com` through VLESS. After a long lock the outbound is stale
  * while VpnService still says CONNECTED, so pushes sit until SCREEN_ON Wake.
  *
- * These packages always DIRECT, ahead of user app rules and automatic lists.
- * YouTube / Play Store stay on their own rules. Layer is a split-tunnel, not
- * a privacy VPN: FCM over the phone's network is the reliable path.
+ * These packages always DIRECT, ahead of user app rules and automatic lists,
+ * and their DNS uses the phone resolver. YouTube / Play Store stay on their
+ * own rules. Layer is a split-tunnel, not a privacy VPN: FCM over the phone's
+ * network is the reliable path.
  */
 object PushDirectPackages {
     val packages: List<String> = listOf(

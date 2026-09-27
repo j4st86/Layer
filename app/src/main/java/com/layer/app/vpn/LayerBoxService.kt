@@ -78,6 +78,18 @@ internal class LayerBoxService(
                 scope.launch { reload() }
                 Service.START_STICKY
             }
+            LayerVpnService.ACTION_UNREACHABLE -> {
+                scope.launch { onServerUnreachable() }
+                Service.START_STICKY
+            }
+            LayerVpnService.ACTION_GIVE_UP -> {
+                scope.launch {
+                    lifecycleMutex.withLock {
+                        failLocked("server unreachable")
+                    }
+                }
+                Service.START_STICKY
+            }
             else -> {
                 // START, Always-on VPN, or reboot: system may pass a null action.
                 if (phase.isSessionLive() && box != null) {
@@ -479,5 +491,23 @@ internal class LayerBoxService(
 
     override fun onBoxStop() {
         requestStop()
+    }
+
+    fun noteServerReachable() {
+        container.autoServerSelector.noteServerReachable()
+    }
+
+    private suspend fun onServerUnreachable() {
+        if (phase != VpnPhase.Started && phase != VpnPhase.Reloading) return
+        val settings = container.repository.currentSnapshot().settings
+        val canSwitch = settings.autoSelectServerEnabled &&
+            AutoServerPolicy.canEnable(settings.servers.size)
+        if (!canSwitch) {
+            dbg("[VPN] event=unreachable action=give-up reason=no-alternative")
+            lifecycleMutex.withLock { failLocked("server unreachable") }
+            return
+        }
+        dbg("[VPN] event=unreachable action=failover")
+        container.autoServerSelector.failoverFromConnectProbe()
     }
 }

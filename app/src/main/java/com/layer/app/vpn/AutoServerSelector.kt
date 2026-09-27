@@ -52,6 +52,7 @@ class AutoServerSelector(
 
     private var monitorJob: Job? = null
     private var lastSwitchElapsed = 0L
+    private var connectFailoverUsed = false
     private var lastGoodCurrentMs: Long? = null
     private var lastTransportKind = -1
     private var networkJob: Job? = null
@@ -185,6 +186,21 @@ class AutoServerSelector(
         handoffRetryJob = null
         wakeJob?.cancel()
         wakeJob = null
+        connectFailoverUsed = false
+    }
+
+    fun noteServerReachable() {
+        connectFailoverUsed = false
+    }
+
+    fun failoverFromConnectProbe() {
+        if (connectFailoverUsed) {
+            log("event=failover action=give-up reason=already-tried")
+            vpnController.giveUpUnreachable()
+            return
+        }
+        connectFailoverUsed = true
+        scope.launch { evaluateConnected(fullScan = true, forceFailover = true) }
     }
 
     fun onNetworkTransportChanged(kind: Int) {
@@ -270,7 +286,7 @@ class AutoServerSelector(
         }
     }
 
-    private suspend fun evaluateConnected(fullScan: Boolean) {
+    private suspend fun evaluateConnected(fullScan: Boolean, forceFailover: Boolean = false) {
         val settings = repository.currentSnapshot().settings
         if (!settings.autoSelectServerEnabled) {
             log("event=evaluate action=skip reason=disabled")
@@ -331,6 +347,7 @@ class AutoServerSelector(
                 countFailure = AutoServerPolicy.countMissTowardFailover(settling),
             )
             if (currentMs != null) {
+                connectFailoverUsed = false
                 lastGoodCurrentMs = AutoServerPolicy.ewma(previousGood, currentMs)
                 val degraded = previousGood != null &&
                     AutoServerPolicy.isDegraded(currentMs, previousGood)
@@ -353,7 +370,7 @@ class AutoServerSelector(
                 _status.value = _status.value.copy(latencyMs = null)
                 connectionPing.publishFromAutoSelect(null)
                 val failures = memory[currentId]?.consecutiveFailures ?: 1
-                if (settling || !AutoServerPolicy.shouldFailover(failures)) {
+                if (!forceFailover && (settling || !AutoServerPolicy.shouldFailover(failures))) {
                     log(
                         "event=current action=miss server=${current.visibleName()} " +
                             "failures=$failures/${AutoServerPolicy.failuresBeforeFullScan} " +
@@ -384,6 +401,7 @@ class AutoServerSelector(
             }
             if (currentMs == null && reachable.isEmpty()) {
                 log("event=switch action=skip reason=all-miss keep=${current.visibleName()}")
+                if (forceFailover) vpnController.giveUpUnreachable()
                 return@withLock
             }
             val candidate = reachable.filterKeys { it != currentId }.minByOrNull { it.value } ?: run {

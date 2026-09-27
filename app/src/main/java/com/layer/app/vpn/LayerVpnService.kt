@@ -40,6 +40,8 @@ class LayerVpnService : VpnService() {
         const val ACTION_STOP = "com.layer.app.STOP"
         const val ACTION_RELOAD = "com.layer.app.RELOAD"
         const val ACTION_REWIRE = "com.layer.app.REWIRE"
+        const val ACTION_UNREACHABLE = "com.layer.app.UNREACHABLE"
+        const val ACTION_GIVE_UP = "com.layer.app.GIVE_UP"
         const val EXTRA_SERVER_NAME = "com.layer.app.EXTRA_SERVER_NAME"
 
         @Volatile
@@ -47,6 +49,10 @@ class LayerVpnService : VpnService() {
 
         fun wakeAfterHandoff(reason: String) {
             running?.box?.recoverAfterHandoff(reason)
+        }
+
+        fun noteReachable() {
+            running?.box?.noteServerReachable()
         }
 
         fun start(context: Context, serverName: String = "") {
@@ -64,6 +70,16 @@ class LayerVpnService : VpnService() {
         fun reload(context: Context) {
             val intent = Intent(context, LayerVpnService::class.java).setAction(ACTION_RELOAD)
             context.startForegroundService(intent)
+        }
+
+        fun reportUnreachable(context: Context) {
+            val intent = Intent(context, LayerVpnService::class.java).setAction(ACTION_UNREACHABLE)
+            context.startService(intent)
+        }
+
+        fun giveUpUnreachable(context: Context) {
+            val intent = Intent(context, LayerVpnService::class.java).setAction(ACTION_GIVE_UP)
+            context.startService(intent)
         }
 
         fun stopIntent(context: Context): Intent {

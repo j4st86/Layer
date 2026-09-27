@@ -85,4 +85,23 @@ class VpnController(
             LayerVpnService.wakeAfterHandoff(reason)
         }
     }
+
+    fun reportServerUnreachable() {
+        if (status.value.state != VpnConnectionState.CONNECTED &&
+            status.value.state != VpnConnectionState.RECONNECTING
+        ) {
+            return
+        }
+        diagnostics.append("[VPN] event=unreachable action=report")
+        LayerVpnService.reportUnreachable(context)
+    }
+
+    fun noteServerReachable() {
+        LayerVpnService.noteReachable()
+    }
+
+    fun giveUpUnreachable() {
+        diagnostics.append("[VPN] event=unreachable action=give-up")
+        LayerVpnService.giveUpUnreachable(context)
+    }
 }

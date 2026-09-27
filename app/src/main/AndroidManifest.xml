@@ -153,6 +153,7 @@
         <package android:name="ru.serebryakovas.lukoilmobileapp" />
         <package android:name="ru.mts.mymts" />
         <package android:name="ru.mts.smartmed" />
+        <package android:name="com.xiaomi.smarthome" />
         <package android:name="ru.mosparking.appnew" />
         <package android:name="ru.sberbankmobile" />
         <package android:name="ru.gibdd_pay.app" />
@@ -161,6 +162,7 @@
         <package android:name="com.idamob.tinkoff.android" />
         <package android:name="ru.yandex.rasp" />
         <package android:name="ru.megafon.mlk" />
+        <package android:name="ru.dvfx.upsushi" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />

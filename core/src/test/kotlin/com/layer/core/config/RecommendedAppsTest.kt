@@ -52,6 +52,8 @@ class RecommendedAppsTest {
             "com.duolingo" to "Duolingo",
             "app.morphe.manager" to "Morphe Manager",
             "ru.mts.smartmed" to "МТС SmartMed",
+            "com.xiaomi.smarthome" to "Xiaomi Home",
+            "ru.dvfx.upsushi" to "UpSushi",
         )
         val rules = RecommendedApps.rulesToAdd(installed, existingPackageNames = emptySet())
         assertEquals(AppRoutingMode.DIRECT, rules.first { it.packageName == "ru.ozon.app.android" }.mode)
@@ -60,5 +62,7 @@ class RecommendedAppsTest {
         assertEquals(AppRoutingMode.VPN, rules.first { it.packageName == "com.duolingo" }.mode)
         assertEquals(AppRoutingMode.VPN, rules.first { it.packageName == "app.morphe.manager" }.mode)
         assertEquals(AppRoutingMode.DIRECT, rules.first { it.packageName == "ru.mts.smartmed" }.mode)
+        assertEquals(AppRoutingMode.DIRECT, rules.first { it.packageName == "com.xiaomi.smarthome" }.mode)
+        assertEquals(AppRoutingMode.DIRECT, rules.first { it.packageName == "ru.dvfx.upsushi" }.mode)
     }
 }

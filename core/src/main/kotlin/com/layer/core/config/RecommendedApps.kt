@@ -90,6 +90,7 @@ object RecommendedApps {
         recDirect("ЛУКОЙЛ", "ru.serebryakovas.lukoilmobileapp"),
         recDirect("Мой МТС", "ru.mts.mymts"),
         recDirect("МТС SmartMed", "ru.mts.smartmed"),
+        recDirect("Xiaomi Home", "com.xiaomi.smarthome"),
         recDirect("МосОблЕИРЦ", "ru.domopult.mosobleirc.android"),
         recDirect("Парковки", "ru.mosparking.appnew"),
         recDirect("СберБанк", "ru.sberbankmobile"),
@@ -99,6 +100,7 @@ object RecommendedApps {
         recDirect("T-Bank", "com.idamob.tinkoff.android"),
         recDirect("Яндекс Электрички", "ru.yandex.rasp"),
         recDirect("Мегафон", "ru.megafon.mlk"),
+        recDirect("UpSushi", "ru.dvfx.upsushi"),
     )
 
     fun rulesToAdd(
