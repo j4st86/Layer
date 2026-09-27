@@ -49,10 +49,16 @@ class RecommendedAppsTest {
             "ru.ozon.app.android" to "OZON",
             "com.vkontakte.android" to "VK",
             "org.telegram.messenger" to "Telegram",
+            "com.duolingo" to "Duolingo",
+            "app.morphe.manager" to "Morphe Manager",
+            "ru.mts.smartmed" to "МТС SmartMed",
         )
         val rules = RecommendedApps.rulesToAdd(installed, existingPackageNames = emptySet())
         assertEquals(AppRoutingMode.DIRECT, rules.first { it.packageName == "ru.ozon.app.android" }.mode)
         assertEquals(AppRoutingMode.DIRECT, rules.first { it.packageName == "com.vkontakte.android" }.mode)
         assertEquals(AppRoutingMode.VPN, rules.first { it.packageName == "org.telegram.messenger" }.mode)
+        assertEquals(AppRoutingMode.VPN, rules.first { it.packageName == "com.duolingo" }.mode)
+        assertEquals(AppRoutingMode.VPN, rules.first { it.packageName == "app.morphe.manager" }.mode)
+        assertEquals(AppRoutingMode.DIRECT, rules.first { it.packageName == "ru.mts.smartmed" }.mode)
     }
 }

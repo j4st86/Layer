@@ -101,7 +101,7 @@
     <string name="ads_empty_body">The ad list stays off until you add an app. Only those apps are checked against it.</string>
     <string name="ads_add">Add app</string>
     <string name="ads_help_title">Ad blocking</string>
-    <string name="ads_help_body">Add the apps where ads should be blocked. Their requests are checked against the list; other apps are not.\n\nWith an empty list the ad list is not loaded, so it does not use the battery.\n\nThe list updates over Wi‑Fi every 7 days. On mobile the copy from the app is used.</string>
+    <string name="ads_help_body">Add the apps where ads should be blocked. Their requests are checked against the list; other apps are not.</string>
 
     <string name="domains_title">Domains</string>
     <string name="domains_empty_title">No custom domains yet</string>
@@ -113,7 +113,6 @@
     <string name="domain_placeholder">youtube.com or сайт.ру</string>
 
     <string name="settings_title">Settings</string>
-    <string name="settings_server">Server</string>
     <string name="settings_auto_select">Automatic server selection</string>
     <string name="settings_auto_select_on">Automatically pick the best available server.</string>
     <string name="settings_auto_select_need_two">You need at least 2 servers for automatic selection</string>

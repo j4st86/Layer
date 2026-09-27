@@ -161,7 +161,6 @@ private fun AdBlockRow(app: AdBlockApp, onDelete: () -> Unit) {
     ) {
         ListItem(
             headlineContent = { Text(app.appName) },
-            supportingContent = { Text(app.packageName) },
             trailingContent = {
                 IconButton(onClick = onDelete) {
                     Icon(

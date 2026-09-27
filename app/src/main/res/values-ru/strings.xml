@@ -103,7 +103,7 @@
     <string name="ads_empty_body">Список рекламы выключен, пока вы не добавите приложение. Проверяются только добавленные.</string>
     <string name="ads_add">Добавить приложение</string>
     <string name="ads_help_title">Блокировка рекламы</string>
-    <string name="ads_help_body">Добавьте приложения, в которых нужно убирать рекламу. Их запросы сверяются со списком, остальные приложения — нет.\n\nЕсли список пуст, список рекламы не загружается и не тратит батарею.\n\nСписок обновляется по Wi‑Fi каждые 7 дней. В мобильной сети берётся копия из приложения.</string>
+    <string name="ads_help_body">Добавьте приложения, в которых нужно убирать рекламу. Их запросы сверяются со списком, остальные приложения — нет.</string>
 
     <string name="domains_title">Домены</string>
     <string name="domains_empty_title">Своих доменов пока нет</string>
@@ -115,7 +115,6 @@
     <string name="domain_placeholder">youtube.com или сайт.ру</string>
 
     <string name="settings_title">Настройки</string>
-    <string name="settings_server">Сервер</string>
     <string name="settings_auto_select">Автоматический выбор сервера</string>
     <string name="settings_auto_select_on">Автоматически выбирать лучший доступный сервер.</string>
     <string name="settings_auto_select_need_two">Для автоматического выбора нужно минимум 2 сервера</string>

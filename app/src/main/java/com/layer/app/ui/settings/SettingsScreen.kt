@@ -30,7 +30,11 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -39,7 +43,7 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -91,6 +95,7 @@ fun SettingsScreen() {
     var showAlwaysOnInfo by remember { mutableStateOf(false) }
     var keepAlive by remember { mutableStateOf(BackgroundKeepAlive.status(context)) }
     var language by remember { mutableStateOf(AppLanguagePreferences.get(context)) }
+    var languageMenuExpanded by remember { mutableStateOf(false) }
     val listColors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     val checking = updateUi is UpdateUiState.Checking
     val canAutoSelect = AutoServerPolicy.canEnable(settings.servers.size)
@@ -118,40 +123,7 @@ fun SettingsScreen() {
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(stringResource(R.string.language), style = MaterialTheme.typography.titleMedium)
-            TonalCard {
-                Column {
-                    AppLanguage.entries.forEachIndexed { index, option ->
-                        if (index > 0) {
-                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                        }
-                        val title = when (option) {
-                            AppLanguage.AUTO -> stringResource(R.string.language_auto)
-                            AppLanguage.RUSSIAN -> stringResource(R.string.language_russian)
-                            AppLanguage.ENGLISH -> stringResource(R.string.language_english)
-                        }
-                        ListItem(
-                            headlineContent = { Text(title) },
-                            leadingContent = {
-                                RadioButton(
-                                    selected = language == option,
-                                    onClick = {
-                                        language = option
-                                        AppLanguagePreferences.set(context, option)
-                                    },
-                                )
-                            },
-                            colors = listColors,
-                            modifier = Modifier.clickable {
-                                language = option
-                                AppLanguagePreferences.set(context, option)
-                            },
-                        )
-                    }
-                }
-            }
-
-            Text(stringResource(R.string.settings_server), style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(R.string.settings_routing), style = MaterialTheme.typography.titleMedium)
             TonalCard {
                 Column {
                     SettingSwitch(
@@ -165,12 +137,7 @@ fun SettingsScreen() {
                         enabled = canAutoSelect,
                         onChecked = viewModel::setAutoSelect,
                     )
-                }
-            }
-
-            Text(stringResource(R.string.settings_routing), style = MaterialTheme.typography.titleMedium)
-            TonalCard {
-                Column {
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
                     SettingSwitch(
                         title = stringResource(R.string.settings_auto_lists),
                         subtitle = stringResource(R.string.settings_auto_lists_sub),
@@ -253,6 +220,55 @@ fun SettingsScreen() {
                         }
                     },
                 )
+            }
+
+            Text(stringResource(R.string.language), style = MaterialTheme.typography.titleMedium)
+            TonalCard {
+                val languageLabel = when (language) {
+                    AppLanguage.AUTO -> stringResource(R.string.language_auto)
+                    AppLanguage.RUSSIAN -> stringResource(R.string.language_russian)
+                    AppLanguage.ENGLISH -> stringResource(R.string.language_english)
+                }
+                ExposedDropdownMenuBox(
+                    expanded = languageMenuExpanded,
+                    onExpandedChange = { languageMenuExpanded = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                ) {
+                    OutlinedTextField(
+                        value = languageLabel,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text(stringResource(R.string.language)) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = languageMenuExpanded) },
+                        colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors(),
+                        modifier = Modifier
+                            .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                            .fillMaxWidth(),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = languageMenuExpanded,
+                        onDismissRequest = { languageMenuExpanded = false },
+                    ) {
+                        AppLanguage.entries.forEach { option ->
+                            val title = when (option) {
+                                AppLanguage.AUTO -> stringResource(R.string.language_auto)
+                                AppLanguage.RUSSIAN -> stringResource(R.string.language_russian)
+                                AppLanguage.ENGLISH -> stringResource(R.string.language_english)
+                            }
+                            DropdownMenuItem(
+                                text = { Text(title) },
+                                onClick = {
+                                    language = option
+                                    languageMenuExpanded = false
+                                    AppLanguagePreferences.set(context, option)
+                                },
+                                contentPadding = ExposedDropdownMenuDefaults.ItemContentPadding,
+                            )
+                        }
+                    }
+                }
             }
 
             Text(stringResource(R.string.settings_reset), style = MaterialTheme.typography.titleMedium)

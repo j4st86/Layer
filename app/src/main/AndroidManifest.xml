@@ -87,6 +87,8 @@
         <package android:name="com.ss.android.ugc.trill" />
         <package android:name="app.morphe.android.youtube" />
         <package android:name="app.morphe.android.apps.youtube.music" />
+        <package android:name="app.morphe.manager" />
+        <package android:name="com.duolingo" />
         <package android:name="com.deniscerri.ytdl" />
         <package android:name="com.openai.chatgpt" />
         <package android:name="com.anthropic.claude" />
@@ -150,6 +152,7 @@
         <package android:name="com.icemobile.lenta.prod" />
         <package android:name="ru.serebryakovas.lukoilmobileapp" />
         <package android:name="ru.mts.mymts" />
+        <package android:name="ru.mts.smartmed" />
         <package android:name="ru.mosparking.appnew" />
         <package android:name="ru.sberbankmobile" />
         <package android:name="ru.gibdd_pay.app" />
