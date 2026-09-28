@@ -145,30 +145,36 @@ class SingBoxConfigGeneratorTest {
     }
 
     @Test
-    fun playServicesAlwaysDirectSoPushBypassesVless() {
+    fun playServicesAlwaysUseTheVpnServerForPush() {
         val json = SingBoxConfigGenerator.generate(
             uuid = sampleUuid,
             settings = sampleSettings.copy(automaticRuleSetEnabled = true),
             appRules = listOf(
-                AppRoutingRule("com.google.android.gms", "Play Services", AppRoutingMode.VPN),
+                AppRoutingRule("com.google.android.gms", "Play Services", AppRoutingMode.DIRECT),
             ),
             domainRules = emptyList(),
             ownPackageName = "com.layer.app",
         ).json
         val rules = Json.parseToJsonElement(json).jsonObject["route"]!!.jsonObject["rules"]!!.jsonArray
         val serialized = rules.map { it.toString() }
-        val pushDirect = serialized.indexOfFirst {
+        val pushTunnel = serialized.indexOfFirst {
             it.contains("com.google.android.gms") &&
                 it.contains("com.google.android.gsf") &&
-                it.contains("\"direct\"")
+                it.contains("\"proxy\"")
         }
-        val userVpnGms = serialized.indexOfFirst {
-            it.contains("com.google.android.gms") && it.contains("\"proxy\"")
+        val mtalk = serialized.indexOfFirst {
+            it.contains("mtalk.google.com") && it.contains("\"proxy\"")
+        }
+        val userDirectGms = serialized.indexOfFirst {
+            it.contains("com.google.android.gms") &&
+                it.contains("\"direct\"") &&
+                !it.contains("com.google.android.gsf")
         }
         val playList = serialized.indexOfFirst { it.contains("rs-google-play") }
-        assertTrue(pushDirect >= 0)
-        assertTrue(userVpnGms > pushDirect)
-        assertTrue(playList > pushDirect)
+        assertTrue(pushTunnel >= 0)
+        assertTrue(mtalk > pushTunnel)
+        assertTrue(userDirectGms > mtalk)
+        assertTrue(playList > mtalk)
     }
 
     @Test

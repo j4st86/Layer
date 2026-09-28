@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.VpnService
+import android.os.PowerManager
 import com.layer.app.LayerApp
 import com.layer.app.R
 import com.layer.app.box.BoxCommandCallbacks
@@ -48,6 +49,7 @@ internal class LayerBoxService(
 
     private var box: LibboxSession? = null
     private var serverName: String = ""
+    private var sessionLock: PowerManager.WakeLock? = null
     private val idle = IdleRecovery(
         context = vpn,
         scope = scope,
@@ -215,6 +217,7 @@ internal class LayerBoxService(
             if (phase != VpnPhase.Starting) return
             idle.markStarted()
             idle.register()
+            acquireSessionLock()
             phase = VpnPhase.Started
             updateStatus(VpnConnectionState.CONNECTED, vpn.getString(R.string.status_connected))
             dbg("[VPN] event=core-started")
@@ -269,6 +272,7 @@ internal class LayerBoxService(
             if (phase != VpnPhase.Reloading) return
             idle.markStarted()
             idle.register()
+            acquireSessionLock()
             phase = VpnPhase.Started
             updateStatus(VpnConnectionState.CONNECTED, vpn.getString(R.string.status_connected))
             dbg("[VPN] event=reload ok")
@@ -338,11 +342,31 @@ internal class LayerBoxService(
         ).also { box = it }
     }
 
+    private fun acquireSessionLock() {
+        if (sessionLock?.isHeld == true) return
+        val pm = vpn.getSystemService(PowerManager::class.java) ?: return
+        val lock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "layer:vpn")
+        lock.setReferenceCounted(false)
+        lock.acquire()
+        sessionLock = lock
+        dbg("[VPN] event=session-lock action=acquire")
+    }
+
+    private fun releaseSessionLock() {
+        val lock = sessionLock ?: return
+        sessionLock = null
+        if (lock.isHeld) {
+            lock.release()
+            dbg("[VPN] event=session-lock action=release")
+        }
+    }
+
     private fun teardownLocked(failed: Boolean, raw: String? = null) {
         container.autoServerSelector.stopMonitoring()
         container.connectionPing.clear()
         idle.unregister()
         idle.clear()
+        releaseSessionLock()
         VpnStatusStore.clearTraffic()
         if (failed) {
             val mapped = ErrorMapper.map(raw)

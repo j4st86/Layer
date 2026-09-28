@@ -209,13 +209,12 @@ object SingBoxConfigGenerator {
                     server = "dns-local",
                 ),
             )
-            // FCM reconnects to mtalk.google.com after every radio handoff.
-            // dns-direct is DoH to 8.8.8.8:443, which times out on that handoff
-            // (and on networks that do not reach 8.8.8.8), so the new session
-            // never opens. The phone resolver still answers.
+            // The FCM connection itself leaves through the proxy. Resolve the
+            // name here so a handoff that cannot reach 8.8.8.8 still learns
+            // where mtalk.google.com is.
             add(
                 DnsRule(
-                    packageName = PushDirectPackages.packages,
+                    packageName = PushTunnelPackages.packages,
                     action = "route",
                     server = "dns-local",
                 ),
@@ -459,7 +458,22 @@ object SingBoxConfigGenerator {
             if (ownPackageName.isNotBlank()) {
                 add(RouteRule(packageName = listOf(ownPackageName), outbound = "direct"))
             }
-            add(RouteRule(packageName = PushDirectPackages.packages, outbound = "direct"))
+            // FCM goes out from the VPN server, as it does in a full tunnel.
+            // User DIRECT rules and rs-google-play cannot pull it back.
+            add(
+                RouteRule(
+                    packageName = PushTunnelPackages.packages,
+                    outbound = "proxy",
+                    udpTimeout = "5m",
+                ),
+            )
+            add(
+                RouteRule(
+                    domain = listOf("mtalk.google.com"),
+                    outbound = "proxy",
+                    udpTimeout = "5m",
+                ),
+            )
             // 1. App DIRECT
             if (directApps.isNotEmpty()) {
                 add(RouteRule(packageName = directApps, outbound = "direct"))
