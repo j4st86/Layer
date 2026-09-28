@@ -7,8 +7,9 @@ package com.layer.core.config
  * the push session timed out on the phone network.
  *
  * These packages always use the proxy, ahead of user app rules and automatic
- * lists. Their names still resolve through the phone resolver. YouTube and the
- * Play Store stay on their own rules.
+ * lists. Their names resolve through the server as well: the phone resolver
+ * can still answer with another VPN's fake-ip. YouTube and the Play Store
+ * stay on their own rules.
  */
 object PushTunnelPackages {
     val packages: List<String> = listOf(

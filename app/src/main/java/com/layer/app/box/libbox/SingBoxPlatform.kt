@@ -16,6 +16,7 @@ import android.os.Process
 import android.system.OsConstants
 import androidx.core.content.ContextCompat
 import com.layer.app.box.BoxHost
+import com.layer.core.config.RoutableDnsAnswers
 import com.layer.core.config.UidPackageCache
 import com.layer.app.vpn.AutoServerSelector
 import com.layer.app.vpn.UnderlyingDns
@@ -298,10 +299,13 @@ internal class SingBoxPlatform(
                     } else {
                         InetAddress.getAllByName(domain)
                     }
-                    val ips = addresses.mapNotNull { it.hostAddress }.filter { it.isNotBlank() }
+                    val raw = addresses.mapNotNull { it.hostAddress }.filter { it.isNotBlank() }
+                    val ips = RoutableDnsAnswers.usable(raw)
                     if (ips.isEmpty()) {
-                        host.dbg("[DNS] event=local-lookup domain=$domain result=empty")
-                        ctx.errorCode(3)
+                        host.dbg(
+                            "[DNS] event=local-lookup domain=$domain result=unusable ips=${raw.joinToString()}",
+                        )
+                        ctx.errorCode(2)
                         return
                     }
                     lookupCount += 1

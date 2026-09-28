@@ -221,7 +221,7 @@ class SingBoxConfigGeneratorTest {
     }
 
     @Test
-    fun playServicesDnsUsesThePhoneResolver() {
+    fun playServicesDnsResolvesThroughTheVpnServer() {
         val json = SingBoxConfigGenerator.generate(
             uuid = sampleUuid,
             settings = sampleSettings,
@@ -229,20 +229,28 @@ class SingBoxConfigGeneratorTest {
             domainRules = emptyList(),
             ownPackageName = "com.layer.app",
         ).json
-        val rules = Json.parseToJsonElement(json).jsonObject["dns"]!!
-            .jsonObject["rules"]!!.jsonArray
+        val root = Json.parseToJsonElement(json).jsonObject
+        val rules = root["dns"]!!.jsonObject["rules"]!!.jsonArray
         val gms = rules.first { rule ->
             rule.jsonObject["package_name"]?.toString().orEmpty()
                 .contains("com.google.android.gms") &&
-                rule.jsonObject["server"]?.jsonPrimitive?.content == "dns-local"
+                rule.jsonObject["server"]?.jsonPrimitive?.content == "dns-proxy"
         }.jsonObject
+        assertEquals("dns-proxy", gms["server"]!!.jsonPrimitive.content)
         assertTrue(gms["package_name"]!!.jsonArray.any {
             it.jsonPrimitive.content == "com.google.android.gsf"
         })
         val mtalk = rules.first { rule ->
             rule.jsonObject["domain"]?.toString().orEmpty().contains("mtalk.google.com")
         }.jsonObject
-        assertEquals("dns-local", mtalk["server"]!!.jsonPrimitive.content)
+        assertEquals("dns-proxy", mtalk["server"]!!.jsonPrimitive.content)
+        val dnsProxy = root["dns"]!!.jsonObject["servers"]!!.jsonArray
+            .first { it.jsonObject["tag"]!!.jsonPrimitive.content == "dns-proxy" }
+            .jsonObject
+        assertEquals("tcp", dnsProxy["type"]!!.jsonPrimitive.content)
+        assertEquals("8.8.8.8", dnsProxy["server"]!!.jsonPrimitive.content)
+        assertEquals("53", dnsProxy["server_port"]!!.jsonPrimitive.content)
+        assertEquals("proxy", dnsProxy["detour"]!!.jsonPrimitive.content)
     }
 
     @Test
@@ -265,7 +273,13 @@ class SingBoxConfigGeneratorTest {
         val autoDns = dnsRules.first { it.jsonObject.containsKey("rule_set") }.jsonObject
         assertEquals("dns-direct", autoDns["server"]!!.jsonPrimitive.content)
         val dnsServers = root["dns"]!!.jsonObject["servers"]!!.jsonArray
-        assertFalse(dnsServers.any { it.jsonObject.containsKey("detour") })
+        val detours = dnsServers.filter { it.jsonObject.containsKey("detour") }
+        assertEquals(1, detours.size)
+        assertEquals("dns-proxy", detours.single().jsonObject["tag"]!!.jsonPrimitive.content)
+        val dnsDirect = dnsServers.first {
+            it.jsonObject["tag"]!!.jsonPrimitive.content == "dns-direct"
+        }.jsonObject
+        assertFalse(dnsDirect.containsKey("detour"))
     }
 
     @Test

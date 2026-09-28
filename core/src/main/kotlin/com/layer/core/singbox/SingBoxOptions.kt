@@ -62,6 +62,15 @@ data class HttpsDnsServer(
 ) : DnsServer
 
 @Serializable
+@SerialName("tcp")
+data class TcpDnsServer(
+    override val tag: String,
+    val server: String,
+    @SerialName("server_port") val serverPort: Int,
+    val detour: String,
+) : DnsServer
+
+@Serializable
 data class DnsRule(
     val domain: List<String>? = null,
     @SerialName("domain_suffix") val domainSuffix: List<String>? = null,

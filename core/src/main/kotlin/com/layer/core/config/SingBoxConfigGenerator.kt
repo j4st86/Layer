@@ -26,6 +26,7 @@ import com.layer.core.singbox.LogOptions
 import com.layer.core.singbox.OutboundTls
 import com.layer.core.singbox.RealityOptions
 import com.layer.core.singbox.RouteOptions
+import com.layer.core.singbox.TcpDnsServer
 import com.layer.core.singbox.RouteRule
 import com.layer.core.singbox.RuleSet
 import com.layer.core.singbox.SingBoxConfig
@@ -209,21 +210,21 @@ object SingBoxConfigGenerator {
                     server = "dns-local",
                 ),
             )
-            // The FCM connection itself leaves through the proxy. Resolve the
-            // name here so a handoff that cannot reach 8.8.8.8 still learns
-            // where mtalk.google.com is.
+            // Phone DNS can answer mtalk.google.com with 198.18.0.0/15 left by
+            // another VPN. That address is rejected below, so the push session
+            // never opens. Resolve the name on the VPN server instead.
             add(
                 DnsRule(
                     packageName = PushTunnelPackages.packages,
                     action = "route",
-                    server = "dns-local",
+                    server = "dns-proxy",
                 ),
             )
             add(
                 DnsRule(
                     domain = listOf("mtalk.google.com"),
                     action = "route",
-                    server = "dns-local",
+                    server = "dns-proxy",
                 ),
             )
             if (directDomains.isNotEmpty()) {
@@ -267,6 +268,14 @@ object SingBoxConfigGenerator {
             servers = listOf(
                 LocalDnsServer(tag = "dns-local"),
                 HttpsDnsServer(tag = "dns-direct", server = "8.8.8.8"),
+                // TCP/53, not DoH on :443. A second TLS through Vision cancels
+                // in-flight dials; a short DNS query does not.
+                TcpDnsServer(
+                    tag = "dns-proxy",
+                    server = "8.8.8.8",
+                    serverPort = 53,
+                    detour = "proxy",
+                ),
             ),
             rules = rules,
             final = "dns-direct",
