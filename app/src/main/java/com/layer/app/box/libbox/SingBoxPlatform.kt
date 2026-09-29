@@ -74,6 +74,9 @@ internal class SingBoxPlatform(
     var underlyingNetwork: Network? = null
         private set
 
+    private var tunReady = false
+    private var publishedUnderlying: Network? = null
+    private var publishedUnderlyingSet = false
     private var lastValidated = false
     private var lastIfaceLog = ""
 
@@ -90,7 +93,12 @@ internal class SingBoxPlatform(
         }
     }
 
-    override fun openTun(options: TunOptions): Int = tun.open(options)
+    override fun openTun(options: TunOptions): Int {
+        val fd = tun.open(options)
+        tunReady = true
+        publishUnderlyingNetworks()
+        return fd
+    }
 
     override fun useProcFS(): Boolean = false
 
@@ -116,6 +124,9 @@ internal class SingBoxPlatform(
     }
 
     fun close() {
+        tunReady = false
+        publishedUnderlying = null
+        publishedUnderlyingSet = false
         runCatching { vpn.unregisterReceiver(packageReceiver) }
         uidPackages.clear()
     }
@@ -128,6 +139,7 @@ internal class SingBoxPlatform(
             val name = cm.getLinkProperties(first)?.interfaceName.orEmpty()
             host.dbg("[NET] event=underlying iface=$name")
             notifyInterfaceUpdate(cm, first, listener)
+            publishUnderlyingNetworks()
         } else {
             host.dbg("[NET] event=underlying iface=none")
         }
@@ -143,6 +155,7 @@ internal class SingBoxPlatform(
                 host.dbg("[NET] event=available iface=$name transport=$transport")
                 underlyingNetwork = network
                 notifyInterfaceUpdate(cm, network, listener)
+                publishUnderlyingNetworks()
                 cm.getNetworkCapabilities(network)?.let { host.notifyAutoServerTransport(it) }
             }
 
@@ -151,6 +164,7 @@ internal class SingBoxPlatform(
                 if (!UnderlyingDns.shouldUseAsUnderlying(cm, underlyingNetwork, network)) return
                 underlyingNetwork = network
                 notifyInterfaceUpdate(cm, network, listener)
+                publishUnderlyingNetworks()
                 val validated = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
                 if (validated && !lastValidated) {
                     val name = cm.getLinkProperties(network)?.interfaceName.orEmpty()
@@ -183,12 +197,14 @@ internal class SingBoxPlatform(
                         } ?: "unknown"
                         host.dbg("[NET] event=lost iface=$lostName fallback=$fbName transport=$transport")
                         notifyInterfaceUpdate(cm, fallback, listener)
+                        publishUnderlyingNetworks()
                         host.recoverAfterHandoff("network-lost")
                         cm.getNetworkCapabilities(fallback)?.let {
                             host.notifyAutoServerTransport(it)
                         }
                     } else {
                         host.dbg("[NET] event=lost iface=$lostName fallback=none")
+                        publishUnderlyingNetworks()
                         listener.updateDefaultInterface("", -1, false, false)
                     }
                 }
@@ -206,6 +222,29 @@ internal class SingBoxPlatform(
             runCatching { connectivity.unregisterNetworkCallback(it) }
             networkCallback = null
         }
+    }
+
+    /**
+     * Excluded UIDs do not use the VPN. After the VPN becomes the default
+     * network, Android only routes them if the physical network is published
+     * via [VpnService.setUnderlyingNetworks]. Otherwise mtalk has nowhere to go.
+     */
+    private fun publishUnderlyingNetworks() {
+        if (!tunReady) return
+        val network = underlyingNetwork
+        if (publishedUnderlyingSet && publishedUnderlying == network) return
+        if (network == null && !publishedUnderlyingSet) return
+        val applied = network?.let { arrayOf(it) }
+        runCatching { vpn.setUnderlyingNetworks(applied) }
+            .onSuccess {
+                publishedUnderlyingSet = true
+                publishedUnderlying = network
+                val name = network?.let { connectivity.getLinkProperties(it)?.interfaceName }.orEmpty()
+                host.dbg("[NET] event=underlying-networks iface=${name.ifEmpty { "none" }}")
+            }
+            .onFailure {
+                host.dbg("[NET] event=underlying-networks action=fail error=${it.message}")
+            }
     }
 
     override fun getInterfaces(): NetworkInterfaceIterator {

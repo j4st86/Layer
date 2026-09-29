@@ -16,6 +16,8 @@ class TunExcludedPackagesTest {
                 "com.google.android.gsf",
                 "app.morphe.android.gms",
                 "app.revanced.android.gms",
+                "com.google.android.gms.supervision",
+                "com.google.android.gms.location.history",
                 "app.morphe.android.youtube",
                 "app.morphe.android.apps.youtube.music",
                 "org.telegram.messenger",
@@ -32,6 +34,8 @@ class TunExcludedPackagesTest {
             excluded,
         )
         assertFalse(TunExcludedPackages.isMicroGPushPackage("com.google.android.gms"))
+        assertFalse(TunExcludedPackages.isMicroGPushPackage("com.google.android.gms.supervision"))
+        assertFalse(TunExcludedPackages.isMicroGPushPackage("com.google.android.gms.location.history"))
         assertFalse(TunExcludedPackages.isMicroGPushPackage("app.morphe.android.youtube"))
         assertTrue(TunExcludedPackages.isMicroGPushPackage("app.morphe.android.gms"))
     }

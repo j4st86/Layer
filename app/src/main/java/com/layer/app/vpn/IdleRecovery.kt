@@ -133,15 +133,24 @@ internal class IdleRecovery(
                     Intent.ACTION_SCREEN_OFF -> {
                         lastScreenOffElapsed = SystemClock.elapsedRealtime()
                         screenOff = true
-                        dbg("[VPN] event=screen action=off")
+                        dbg("[VPN] event=screen action=off ${VpnStatusStore.quietFields()}")
                         scheduleIdleAlarm()
                     }
                     Intent.ACTION_SCREEN_ON,
                     Intent.ACTION_USER_PRESENT,
                     -> {
+                        val offFor = if (lastScreenOffElapsed > 0L) {
+                            SystemClock.elapsedRealtime() - lastScreenOffElapsed
+                        } else {
+                            -1L
+                        }
+                        val action = if (intent.action == Intent.ACTION_USER_PRESENT) {
+                            "user-present"
+                        } else {
+                            "on"
+                        }
                         dbg(
-                            "[VPN] event=screen action=" +
-                                if (intent.action == Intent.ACTION_USER_PRESENT) "user-present" else "on",
+                            "[VPN] event=screen action=$action offForMs=$offFor ${VpnStatusStore.quietFields()}",
                         )
                         screenOff = false
                         cancelIdleAlarm()
@@ -154,7 +163,7 @@ internal class IdleRecovery(
                     PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED -> {
                         val idle = this@IdleRecovery.context
                             .getSystemService(PowerManager::class.java).isDeviceIdleMode
-                        dbg("[VPN] event=idle-mode on=$idle")
+                        dbg("[VPN] event=idle-mode on=$idle ${VpnStatusStore.quietFields()}")
                         if (idle) {
                             if (lastScreenOffElapsed == 0L) {
                                 lastScreenOffElapsed = SystemClock.elapsedRealtime()
@@ -197,6 +206,11 @@ internal class IdleRecovery(
 
     fun scheduleIfScreenOff() {
         if (screenOff) scheduleIdleAlarm()
+    }
+
+    fun screenOffForMs(now: Long = SystemClock.elapsedRealtime()): Long {
+        if (!screenOff || lastScreenOffElapsed <= 0L) return -1L
+        return now - lastScreenOffElapsed
     }
 
     private fun onTunnelTraffic() {

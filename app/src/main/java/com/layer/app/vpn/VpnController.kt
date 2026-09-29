@@ -19,6 +19,18 @@ object VpnStatusStore {
     var lastTrafficElapsed: Long = 0L
         private set
 
+    @Volatile
+    var lastStatusElapsed: Long = 0L
+        private set
+
+    @Volatile
+    var connectionsIn: Int = -1
+        private set
+
+    @Volatile
+    var connectionsOut: Int = -1
+        private set
+
     fun update(status: VpnUiStatus) {
         _status.value = status
     }
@@ -28,9 +40,27 @@ object VpnStatusStore {
         trafficListener?.invoke()
     }
 
+    fun noteStatus(connectionsIn: Int, connectionsOut: Int) {
+        this.connectionsIn = connectionsIn
+        this.connectionsOut = connectionsOut
+        lastStatusElapsed = SystemClock.elapsedRealtime()
+    }
+
     fun clearTraffic() {
         lastTrafficElapsed = 0L
+        lastStatusElapsed = 0L
+        connectionsIn = -1
+        connectionsOut = -1
     }
+
+    /** Ages for screen-off and idle-ping lines. -1 means that clock was never set. */
+    fun quietFields(now: Long = SystemClock.elapsedRealtime()): String {
+        return "sinceTrafficMs=${age(lastTrafficElapsed, now)} " +
+            "sinceStatusMs=${age(lastStatusElapsed, now)} " +
+            "connIn=$connectionsIn connOut=$connectionsOut"
+    }
+
+    private fun age(then: Long, now: Long): Long = if (then <= 0L) -1L else now - then
 
     /** Screen-off idle alarm slides forward while the tunnel is carrying traffic. */
     @Volatile

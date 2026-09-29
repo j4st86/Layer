@@ -350,17 +350,19 @@ internal class LayerBoxService(
         lock?.setReferenceCounted(false)
         lock?.acquire(IdleRecoveryPolicy.idlePingLockMs)
         try {
-            if (!phase.isSessionLive() || box == null) {
-                dbg("[VPN] event=idle-ping action=skip reason=not-live")
-                return
-            }
             val now = SystemClock.elapsedRealtime()
-            if (!IdleRecoveryPolicy.shouldIdlePing(now, VpnStatusStore.lastTrafficElapsed)) {
-                dbg("[VPN] event=idle-ping action=skip reason=recent-traffic")
+            val context = "screenOffMs=${idle.screenOffForMs(now)} ${VpnStatusStore.quietFields(now)}"
+            if (!phase.isSessionLive() || box == null) {
+                dbg("[VPN] event=idle-ping action=skip reason=not-live $context")
                 return
             }
-            dbg("[VPN] event=idle-ping action=wake")
+            if (!IdleRecoveryPolicy.shouldIdlePing(now, VpnStatusStore.lastTrafficElapsed)) {
+                dbg("[VPN] event=idle-ping action=skip reason=recent-traffic $context")
+                return
+            }
+            dbg("[VPN] event=idle-ping action=wake $context")
             runCatching { box?.wake() }
+                .onFailure { dbg("[VPN] event=idle-ping action=wake-failed error=${it.message} $context") }
         } finally {
             if (lock?.isHeld == true) lock.release()
             idle.scheduleIfScreenOff()

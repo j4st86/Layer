@@ -22,8 +22,13 @@ object TunExcludedPackages {
         }.distinct()
     }
 
-    /** microG GmsCore, not Play Services and not a Morphe app such as YouTube. */
+    /**
+     * microG GmsCore only. Play Services and its siblings
+     * (`com.google.android.gms.supervision`, location history) stay out of this
+     * list: they are not the Morphe push process, and YouTube must stay in the tunnel.
+     */
     fun isMicroGPushPackage(packageName: String): Boolean {
-        return packageName != PLAY_SERVICES && packageName.contains(".android.gms")
+        return packageName.contains(".android.gms") &&
+            !packageName.startsWith("com.google.android.gms")
     }
 }

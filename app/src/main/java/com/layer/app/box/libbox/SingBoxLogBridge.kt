@@ -1,11 +1,15 @@
 package com.layer.app.box.libbox
 
+import android.os.SystemClock
 import com.layer.app.diagnostics.DiagnosticLog
 import com.layer.app.vpn.VpnStatusStore
 import com.layer.core.diagnostics.BoxLogFilter
 import com.layer.core.diagnostics.BoxLogRateLimiter
+import com.layer.core.diagnostics.DiagnosticConnections
 import io.nekohasekai.libbox.CommandClientHandler
+import io.nekohasekai.libbox.Connection
 import io.nekohasekai.libbox.ConnectionEvents
+import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.LogIterator
 import io.nekohasekai.libbox.OutboundGroupItemIterator
 import io.nekohasekai.libbox.OutboundGroupIterator
@@ -17,7 +21,7 @@ internal class SingBoxLogBridge(
     private val onDisconnected: (String?) -> Unit,
     private val onLogStreamReady: () -> Unit,
 ) : CommandClientHandler {
-    private var lastStatMs = 0L
+    private var lastStatElapsed = 0L
     private val rateLimiter = BoxLogRateLimiter()
 
     override fun clearLogs() = Unit
@@ -43,7 +47,42 @@ internal class SingBoxLogBridge(
 
     override fun updateClashMode(mode: String?) = Unit
 
-    override fun writeConnectionEvents(events: ConnectionEvents?) = Unit
+    override fun writeConnectionEvents(events: ConnectionEvents?) {
+        if (events == null) return
+        runCatching {
+            if (events.reset) {
+                diagnostics.append("[CONN] event=reset")
+            }
+            val iterator = events.iterator() ?: return
+            while (iterator.hasNext()) {
+                val event = iterator.next() ?: continue
+                val kind = when (event.type.toLong()) {
+                    Libbox.ConnectionEventNew -> "open"
+                    Libbox.ConnectionEventClosed -> "close"
+                    else -> continue
+                }
+                val conn = event.connection ?: continue
+                val packages = packageNames(conn)
+                val destination = conn.destination.orEmpty()
+                val domain = conn.domain.orEmpty()
+                if (!DiagnosticConnections.keep(destination, domain, packages)) continue
+                val alive = if (kind == "close" && conn.closedAt > 0L && conn.createdAt > 0L) {
+                    " aliveMs=${conn.closedAt - conn.createdAt}"
+                } else {
+                    ""
+                }
+                diagnostics.append(
+                    "[CONN] event=$kind network=${conn.network.orEmpty()} " +
+                        "dest=$destination domain=$domain " +
+                        "pkg=${packages.joinToString(",").ifEmpty { "-" }} " +
+                        "outbound=${conn.outbound.orEmpty()}$alive " +
+                        "up=${conn.uplink} down=${conn.downlink}",
+                )
+            }
+        }.onFailure {
+            diagnostics.append("[CONN] event=read-failed error=${it.message}")
+        }
+    }
 
     override fun writeGroups(groups: OutboundGroupIterator?) = Unit
 
@@ -74,9 +113,14 @@ internal class SingBoxLogBridge(
         if (message.uplink > 0L || message.downlink > 0L) {
             VpnStatusStore.noteTraffic()
         }
-        val now = System.currentTimeMillis()
-        if (now - lastStatMs < 8_000L) return
-        lastStatMs = now
+        VpnStatusStore.noteStatus(message.connectionsIn, message.connectionsOut)
+        val now = SystemClock.elapsedRealtime()
+        val gap = if (lastStatElapsed > 0L) now - lastStatElapsed else 0L
+        if (gap >= STATUS_GAP_MS) {
+            diagnostics.append("[STAT] event=resume gapMs=$gap ${VpnStatusStore.quietFields(now)}")
+        }
+        if (lastStatElapsed > 0L && gap < STATUS_INTERVAL_MS) return
+        lastStatElapsed = now
         diagnostics.append(
             "[STAT] conn in=${message.connectionsIn} out=${message.connectionsOut} " +
                 "up=${message.uplink} down=${message.downlink} " +
@@ -86,6 +130,9 @@ internal class SingBoxLogBridge(
     }
 
     companion object {
+        private const val STATUS_INTERVAL_MS = 8_000L
+        private const val STATUS_GAP_MS = 30_000L
+
         fun levelName(level: Int): String = when (level) {
             0 -> "panic"
             1 -> "fatal"
@@ -95,6 +142,16 @@ internal class SingBoxLogBridge(
             5 -> "debug"
             6 -> "trace"
             else -> "lv$level"
+        }
+    }
+
+    private fun packageNames(conn: Connection): List<String> {
+        val info = conn.processInfo ?: return emptyList()
+        val names = info.packageNames() ?: return emptyList()
+        return buildList {
+            while (names.hasNext()) {
+                names.next()?.takeIf { it.isNotBlank() }?.let { add(it) }
+            }
         }
     }
 }
