@@ -25,11 +25,16 @@ object VpnStatusStore {
 
     fun noteTraffic() {
         lastTrafficElapsed = SystemClock.elapsedRealtime()
+        trafficListener?.invoke()
     }
 
     fun clearTraffic() {
         lastTrafficElapsed = 0L
     }
+
+    /** Screen-off idle alarm slides forward while the tunnel is carrying traffic. */
+    @Volatile
+    var trafficListener: (() -> Unit)? = null
 
     fun hasRecentTraffic(windowMs: Long = AutoServerPolicy.trafficQuietMs): Boolean {
         if (lastTrafficElapsed <= 0L) return false

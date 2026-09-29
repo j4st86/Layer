@@ -21,16 +21,20 @@ package com.layer.core.config
  * swallow the handoff Wake: a screen-on 7s before Wi-Fi drop would otherwise
  * leave the VLESS outbound bound to a dead iface until the next idle recover.
  *
- * While the screen is off, Kotlin STAT still runs every 1–2 minutes but the Go
- * VLESS socket can sit half-dead until Doze's next maintenance window. A
- * periodic [Wake] (not reload, not resetNetwork) on that cadence keeps FCM and
- * Telegram from waiting for unlock.
+ * A partial wake lock held for the whole session keeps the phone out of
+ * suspend. TCP keepalive inside sing-box is 3 minutes. Deep idle can still
+ * freeze that timer, so one inexact idle alarm, 12 minutes apart, may send a
+ * single wake. The lock around that ping is capped at 3 seconds. Recent
+ * tunnel traffic skips the ping: media already keeps the session warm.
  */
 object IdleRecoveryPolicy {
     const val minUptimeMs = 4_000L
     const val debounceMs = 90_000L
     const val handoffDebounceMs = 15_000L
-    const val idlePokeMs = 120_000L
+    const val idleAlarmMs = 12 * 60 * 1000L
+    const val idlePingLockMs = 3_000L
+    const val idlePingSkipTrafficMs = 3 * 60 * 1000L
+    const val alarmSlideMinMs = 60_000L
 
     enum class Action { Skip, Wake }
 
@@ -113,5 +117,11 @@ object IdleRecoveryPolicy {
     fun sinceLastLabel(nowElapsed: Long, lastElapsed: Long): String {
         if (lastElapsed <= 0L) return "never"
         return (nowElapsed - lastElapsed).toString()
+    }
+
+    /** True when the tunnel has been quiet long enough that NAT may have dropped. */
+    fun shouldIdlePing(nowElapsed: Long, lastTrafficElapsed: Long): Boolean {
+        if (lastTrafficElapsed <= 0L) return true
+        return nowElapsed - lastTrafficElapsed > idlePingSkipTrafficMs
     }
 }

@@ -6,6 +6,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.VpnService
 import android.os.PowerManager
+import android.os.SystemClock
 import com.layer.app.LayerApp
 import com.layer.app.R
 import com.layer.app.box.BoxCommandCallbacks
@@ -15,6 +16,7 @@ import com.layer.app.box.libbox.LibboxSession
 import com.layer.app.data.AdBlockDownloader
 import com.layer.app.data.RuleSetDownloader
 import com.layer.core.config.AutoServerPolicy
+import com.layer.core.config.IdleRecoveryPolicy
 import com.layer.core.config.RuleSetCatalog
 import com.layer.core.diagnostics.ErrorMapper
 import com.layer.core.diagnostics.LogSanitizer
@@ -49,10 +51,8 @@ internal class LayerBoxService(
 
     private var box: LibboxSession? = null
     private var serverName: String = ""
-    private var sessionLock: PowerManager.WakeLock? = null
     private val idle = IdleRecovery(
         context = vpn,
-        scope = scope,
         isLive = { phase.isSessionLive() && box != null },
         wake = { runCatching { box?.wake() } },
         onInteractive = { container.autoServerSelector.onDeviceBecameInteractive() },
@@ -90,6 +90,10 @@ internal class LayerBoxService(
                         failLocked("server unreachable")
                     }
                 }
+                Service.START_STICKY
+            }
+            LayerVpnService.ACTION_IDLE_PING -> {
+                onIdlePing()
                 Service.START_STICKY
             }
             else -> {
@@ -217,7 +221,6 @@ internal class LayerBoxService(
             if (phase != VpnPhase.Starting) return
             idle.markStarted()
             idle.register()
-            acquireSessionLock()
             phase = VpnPhase.Started
             updateStatus(VpnConnectionState.CONNECTED, vpn.getString(R.string.status_connected))
             dbg("[VPN] event=core-started")
@@ -272,7 +275,6 @@ internal class LayerBoxService(
             if (phase != VpnPhase.Reloading) return
             idle.markStarted()
             idle.register()
-            acquireSessionLock()
             phase = VpnPhase.Started
             updateStatus(VpnConnectionState.CONNECTED, vpn.getString(R.string.status_connected))
             dbg("[VPN] event=reload ok")
@@ -342,22 +344,26 @@ internal class LayerBoxService(
         ).also { box = it }
     }
 
-    private fun acquireSessionLock() {
-        if (sessionLock?.isHeld == true) return
-        val pm = vpn.getSystemService(PowerManager::class.java) ?: return
-        val lock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "layer:vpn")
-        lock.setReferenceCounted(false)
-        lock.acquire()
-        sessionLock = lock
-        dbg("[VPN] event=session-lock action=acquire")
-    }
-
-    private fun releaseSessionLock() {
-        val lock = sessionLock ?: return
-        sessionLock = null
-        if (lock.isHeld) {
-            lock.release()
-            dbg("[VPN] event=session-lock action=release")
+    private fun onIdlePing() {
+        val pm = vpn.getSystemService(PowerManager::class.java)
+        val lock = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "layer:vpn")
+        lock?.setReferenceCounted(false)
+        lock?.acquire(IdleRecoveryPolicy.idlePingLockMs)
+        try {
+            if (!phase.isSessionLive() || box == null) {
+                dbg("[VPN] event=idle-ping action=skip reason=not-live")
+                return
+            }
+            val now = SystemClock.elapsedRealtime()
+            if (!IdleRecoveryPolicy.shouldIdlePing(now, VpnStatusStore.lastTrafficElapsed)) {
+                dbg("[VPN] event=idle-ping action=skip reason=recent-traffic")
+                return
+            }
+            dbg("[VPN] event=idle-ping action=wake")
+            runCatching { box?.wake() }
+        } finally {
+            if (lock?.isHeld == true) lock.release()
+            idle.scheduleIfScreenOff()
         }
     }
 
@@ -366,7 +372,6 @@ internal class LayerBoxService(
         container.connectionPing.clear()
         idle.unregister()
         idle.clear()
-        releaseSessionLock()
         VpnStatusStore.clearTraffic()
         if (failed) {
             val mapped = ErrorMapper.map(raw)

@@ -26,7 +26,6 @@ import com.layer.core.singbox.LogOptions
 import com.layer.core.singbox.OutboundTls
 import com.layer.core.singbox.RealityOptions
 import com.layer.core.singbox.RouteOptions
-import com.layer.core.singbox.TcpDnsServer
 import com.layer.core.singbox.RouteRule
 import com.layer.core.singbox.RuleSet
 import com.layer.core.singbox.SingBoxConfig
@@ -78,6 +77,7 @@ object SingBoxConfigGenerator {
         adBlockPackages: List<String> = emptyList(),
         adBlockRuleSetPath: String? = null,
         logLevel: String = "info",
+        tunExcludePackages: List<String> = emptyList(),
     ): ConfigGenerationResult {
         val trimmedUuid = VlessLinkParser.extractUuid(uuid)
         if (trimmedUuid.isNullOrBlank()) {
@@ -163,7 +163,21 @@ object SingBoxConfigGenerator {
                 ipv6Enabled = settings.ipv6Enabled,
                 adBlockPackages = if (adBlockPath != null) adPackages else emptyList(),
             ),
-            inbounds = listOf(buildTun(settings.ipv6Enabled)),
+            inbounds = listOf(
+                buildTun(
+                    ipv6 = settings.ipv6Enabled,
+                    excludePackages = tunExcludePackages.ifEmpty {
+                        TunExcludedPackages.resolve(
+                            ownPackageName,
+                            listOf(
+                                ownPackageName,
+                                TunExcludedPackages.PLAY_SERVICES,
+                                TunExcludedPackages.SERVICES_FRAMEWORK,
+                            ),
+                        )
+                    },
+                ),
+            ),
             outbounds = listOf(
                 buildVless(
                     server = dialAddress,
@@ -210,23 +224,6 @@ object SingBoxConfigGenerator {
                     server = "dns-local",
                 ),
             )
-            // Phone DNS can answer mtalk.google.com with 198.18.0.0/15 left by
-            // another VPN. That address is rejected below, so the push session
-            // never opens. Resolve the name on the VPN server instead.
-            add(
-                DnsRule(
-                    packageName = PushTunnelPackages.packages,
-                    action = "route",
-                    server = "dns-proxy",
-                ),
-            )
-            add(
-                DnsRule(
-                    domain = listOf("mtalk.google.com"),
-                    action = "route",
-                    server = "dns-proxy",
-                ),
-            )
             if (directDomains.isNotEmpty()) {
                 add(
                     DnsRule(
@@ -268,14 +265,6 @@ object SingBoxConfigGenerator {
             servers = listOf(
                 LocalDnsServer(tag = "dns-local"),
                 HttpsDnsServer(tag = "dns-direct", server = "8.8.8.8"),
-                // TCP/53, not DoH on :443. A second TLS through Vision cancels
-                // in-flight dials; a short DNS query does not.
-                TcpDnsServer(
-                    tag = "dns-proxy",
-                    server = "8.8.8.8",
-                    serverPort = 53,
-                    detour = "proxy",
-                ),
             ),
             rules = rules,
             final = "dns-direct",
@@ -284,7 +273,7 @@ object SingBoxConfigGenerator {
         )
     }
 
-    private fun buildTun(ipv6: Boolean): TunInbound {
+    private fun buildTun(ipv6: Boolean, excludePackages: List<String>): TunInbound {
         return TunInbound(
             tag = "tun-in",
             address = buildList {
@@ -293,7 +282,9 @@ object SingBoxConfigGenerator {
             },
             mtu = 1500,
             autoRoute = true,
-            strictRoute = true,
+            // strict_route drops traffic from excluded UIDs on some sing-box
+            // builds. FCM is excluded from the TUN, so leave this off.
+            strictRoute = false,
             // mixed/system TCP NATs SYNs onto a kernel listener bound to the TUN
             // address. Layer excludes itself from VpnService, so that listener
             // never accepts and user TCP dies after pre-match. gVisor keeps L3→L4
@@ -306,6 +297,7 @@ object SingBoxConfigGenerator {
             // Sniffed QUIC otherwise expires in 30s; the next datagram is a new
             // connection without ClientHello and falls through to DIRECT.
             udpTimeout = "5m",
+            excludePackage = excludePackages,
         )
     }
 
@@ -330,10 +322,11 @@ object SingBoxConfigGenerator {
             flow = flow.takeIf { it.isNotBlank() },
             packetEncoding = "xudp",
             domainResolver = "dns-local",
-            // After Doze/screen-off, carrier NAT drops idle TCP. Default keep-alive
-            // idle is 5m, so the VLESS socket looks alive until the next dial times out.
-            tcpKeepAlive = "15s",
-            tcpKeepAliveInterval = "15s",
+            // 15s keeps the LTE radio out of RRC idle and was paired with a
+            // session-long wake lock. 3m is inside the 2–5m window for a TCP
+            // tunnel. Doze may freeze this timer; the idle alarm covers that.
+            tcpKeepAlive = "3m",
+            tcpKeepAliveInterval = "3m",
             connectTimeout = "15s",
             tls = OutboundTls(
                 enabled = true,
@@ -467,22 +460,6 @@ object SingBoxConfigGenerator {
             if (ownPackageName.isNotBlank()) {
                 add(RouteRule(packageName = listOf(ownPackageName), outbound = "direct"))
             }
-            // FCM goes out from the VPN server, as it does in a full tunnel.
-            // User DIRECT rules and rs-google-play cannot pull it back.
-            add(
-                RouteRule(
-                    packageName = PushTunnelPackages.packages,
-                    outbound = "proxy",
-                    udpTimeout = "5m",
-                ),
-            )
-            add(
-                RouteRule(
-                    domain = listOf("mtalk.google.com"),
-                    outbound = "proxy",
-                    udpTimeout = "5m",
-                ),
-            )
             // 1. App DIRECT
             if (directApps.isNotEmpty()) {
                 add(RouteRule(packageName = directApps, outbound = "direct"))

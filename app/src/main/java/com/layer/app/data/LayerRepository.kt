@@ -11,6 +11,7 @@ import com.layer.core.config.ParsedVlessLink
 import com.layer.core.config.RecommendedApps
 import com.layer.core.config.SingBoxConfigGenerator
 import com.layer.core.config.SubscriptionParser
+import com.layer.core.config.TunExcludedPackages
 import com.layer.core.config.VlessLinkParser
 import com.layer.core.config.VpnConnectionInput
 import com.layer.core.config.VpnConnectionParser
@@ -359,6 +360,12 @@ class LayerRepository(
             adBlockPackages = snap.adBlockApps.map { it.packageName },
             adBlockRuleSetPath = adBlockRuleSetPath,
             logLevel = "info",
+            tunExcludePackages = TunExcludedPackages.resolve(
+                ownPackageName = context.packageName,
+                installedPackages = context.packageManager.getInstalledPackages(
+                    PackageManager.PackageInfoFlags.of(0),
+                ).map { it.packageName },
+            ),
         )
     }
 

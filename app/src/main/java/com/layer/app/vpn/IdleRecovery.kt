@@ -1,5 +1,7 @@
 package com.layer.app.vpn
 
+import android.app.AlarmManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -9,11 +11,6 @@ import android.os.PowerManager
 import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import com.layer.core.config.IdleRecoveryPolicy
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 
 /**
  * SCREEN_ON / Doze / wifi↔cell recovery. Always Wake, never TUN reload:
@@ -21,7 +18,6 @@ import kotlinx.coroutines.launch
  */
 internal class IdleRecovery(
     private val context: Context,
-    private val scope: CoroutineScope,
     private val isLive: () -> Boolean,
     private val wake: () -> Unit,
     private val onInteractive: () -> Unit,
@@ -32,8 +28,9 @@ internal class IdleRecovery(
     private var lastIdleRecoverElapsed = 0L
     private var lastHandoffWakeElapsed = 0L
     private var lastScreenOffElapsed = 0L
+    private var screenOff = false
+    private var lastSlideElapsed = 0L
     private var screenReceiver: BroadcastReceiver? = null
-    private var idlePokeJob: Job? = null
 
     fun markStarted() {
         val now = SystemClock.elapsedRealtime()
@@ -47,6 +44,8 @@ internal class IdleRecovery(
         lastIdleRecoverElapsed = 0L
         lastHandoffWakeElapsed = 0L
         lastScreenOffElapsed = 0L
+        screenOff = false
+        lastSlideElapsed = 0L
     }
 
     fun recoverAfterIdle(reason: String, longIdleReload: Boolean = false) {
@@ -133,8 +132,9 @@ internal class IdleRecovery(
                 when (intent?.action) {
                     Intent.ACTION_SCREEN_OFF -> {
                         lastScreenOffElapsed = SystemClock.elapsedRealtime()
+                        screenOff = true
                         dbg("[VPN] event=screen action=off")
-                        startIdlePoke()
+                        scheduleIdleAlarm()
                     }
                     Intent.ACTION_SCREEN_ON,
                     Intent.ACTION_USER_PRESENT,
@@ -143,7 +143,8 @@ internal class IdleRecovery(
                             "[VPN] event=screen action=" +
                                 if (intent.action == Intent.ACTION_USER_PRESENT) "user-present" else "on",
                         )
-                        stopIdlePoke()
+                        screenOff = false
+                        cancelIdleAlarm()
                         recoverAfterIdle(
                             if (intent.action == Intent.ACTION_USER_PRESENT) "user-present" else "screen-on",
                             longIdleReload = true,
@@ -177,35 +178,58 @@ internal class IdleRecovery(
             filter,
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
+        VpnStatusStore.trafficListener = { onTunnelTraffic() }
         val interactive = context.getSystemService(PowerManager::class.java)?.isInteractive != false
-        if (!interactive) startIdlePoke()
+        screenOff = !interactive
+        if (screenOff) scheduleIdleAlarm()
     }
 
     fun unregister() {
-        stopIdlePoke()
+        if (VpnStatusStore.trafficListener != null) {
+            VpnStatusStore.trafficListener = null
+        }
+        cancelIdleAlarm()
+        screenOff = false
         val receiver = screenReceiver ?: return
         screenReceiver = null
         runCatching { context.unregisterReceiver(receiver) }
     }
 
-    private fun startIdlePoke() {
-        if (!isLive()) return
-        if (idlePokeJob?.isActive == true) return
-        dbg("[VPN] event=idle-poke action=start intervalMs=${IdleRecoveryPolicy.idlePokeMs}")
-        idlePokeJob = scope.launch {
-            while (isActive) {
-                delay(IdleRecoveryPolicy.idlePokeMs)
-                if (!isLive()) return@launch
-                recoverAfterIdle("idle-poke")
-            }
-        }
+    fun scheduleIfScreenOff() {
+        if (screenOff) scheduleIdleAlarm()
     }
 
-    private fun stopIdlePoke() {
-        if (idlePokeJob != null) {
-            dbg("[VPN] event=idle-poke action=stop")
-        }
-        idlePokeJob?.cancel()
-        idlePokeJob = null
+    private fun onTunnelTraffic() {
+        if (!screenOff) return
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastSlideElapsed < IdleRecoveryPolicy.alarmSlideMinMs) return
+        lastSlideElapsed = now
+        scheduleIdleAlarm()
+    }
+
+    private fun scheduleIdleAlarm() {
+        val alarm = context.getSystemService(AlarmManager::class.java) ?: return
+        val trigger = SystemClock.elapsedRealtime() + IdleRecoveryPolicy.idleAlarmMs
+        alarm.setAndAllowWhileIdle(
+            AlarmManager.ELAPSED_REALTIME_WAKEUP,
+            trigger,
+            idlePingPending(),
+        )
+        dbg("[VPN] event=idle-alarm action=schedule inMs=${IdleRecoveryPolicy.idleAlarmMs}")
+    }
+
+    private fun cancelIdleAlarm() {
+        val alarm = context.getSystemService(AlarmManager::class.java) ?: return
+        alarm.cancel(idlePingPending())
+        dbg("[VPN] event=idle-alarm action=cancel")
+    }
+
+    private fun idlePingPending(): PendingIntent {
+        return PendingIntent.getService(
+            context,
+            3,
+            LayerVpnService.idlePingIntent(context),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
     }
 }

@@ -4,6 +4,7 @@ import android.net.IpPrefix
 import android.net.VpnService
 import android.os.ParcelFileDescriptor
 import com.layer.app.box.BoxHost
+import com.layer.core.config.TunExcludedPackages
 import io.nekohasekai.libbox.RoutePrefixIterator
 import io.nekohasekai.libbox.StringIterator
 import io.nekohasekai.libbox.TunOptions
@@ -94,15 +95,18 @@ internal class LibboxTun(
                     .onSuccess { note("[TUN] allow $pkg") }
                     .onFailure { note("[TUN] allow $pkg failed: ${it.message}") }
             }
-            drainStrings(options.excludePackage).forEach { pkg ->
+        }
+        val configured = drainStrings(options.excludePackage)
+        val installed = vpn.packageManager.getInstalledPackages(
+            android.content.pm.PackageManager.PackageInfoFlags.of(0),
+        ).map { it.packageName }
+        (configured + TunExcludedPackages.resolve(vpn.packageName, installed))
+            .distinct()
+            .forEach { pkg ->
                 runCatching { builder.addDisallowedApplication(pkg) }
                     .onSuccess { note("[TUN] disallow $pkg") }
                     .onFailure { note("[TUN] disallow $pkg failed: ${it.message}") }
             }
-        }
-        runCatching { builder.addDisallowedApplication(vpn.packageName) }
-            .onSuccess { note("[TUN] disallow self ${vpn.packageName}") }
-            .onFailure { note("[TUN] disallow self failed: ${it.message}") }
         // Close the old PFD before establish(). The next establish() already
         // invalidates it; reading previous.fd afterwards throws "Already closed".
         val previous = fd

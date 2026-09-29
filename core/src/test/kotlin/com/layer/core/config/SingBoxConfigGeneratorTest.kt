@@ -111,8 +111,8 @@ class SingBoxConfigGeneratorTest {
         assertTrue(json.contains("1.1.1.1/32"))
         assertTrue(json.contains("\"protocol\": \"quic\""))
         assertTrue(json.contains("\"udp_timeout\": \"5m\""))
-        assertTrue(json.contains("\"tcp_keep_alive\": \"15s\""))
-        assertTrue(json.contains("\"tcp_keep_alive_interval\": \"15s\""))
+        assertTrue(json.contains("\"tcp_keep_alive\": \"3m\""))
+        assertTrue(json.contains("\"tcp_keep_alive_interval\": \"3m\""))
         assertTrue(json.contains("\"connect_timeout\": \"15s\""))
         assertFalse(json.contains(UUID_PLACEHOLDER))
 
@@ -145,36 +145,46 @@ class SingBoxConfigGeneratorTest {
     }
 
     @Test
-    fun playServicesAlwaysUseTheVpnServerForPush() {
+    fun playServicesStayOutsideTheTunnel() {
         val json = SingBoxConfigGenerator.generate(
             uuid = sampleUuid,
             settings = sampleSettings.copy(automaticRuleSetEnabled = true),
             appRules = listOf(
-                AppRoutingRule("com.google.android.gms", "Play Services", AppRoutingMode.DIRECT),
+                AppRoutingRule("com.google.android.gms", "Play Services", AppRoutingMode.VPN),
+                AppRoutingRule("app.morphe.android.youtube", "YouTube Morphe", AppRoutingMode.VPN),
             ),
             domainRules = emptyList(),
             ownPackageName = "com.layer.app",
+            tunExcludePackages = TunExcludedPackages.resolve(
+                ownPackageName = "com.layer.app",
+                installedPackages = listOf(
+                    "com.layer.app",
+                    "com.google.android.gms",
+                    "com.google.android.gsf",
+                    "app.morphe.android.gms",
+                    "app.morphe.android.youtube",
+                ),
+            ),
         ).json
-        val rules = Json.parseToJsonElement(json).jsonObject["route"]!!.jsonObject["rules"]!!.jsonArray
-        val serialized = rules.map { it.toString() }
-        val pushTunnel = serialized.indexOfFirst {
-            it.contains("com.google.android.gms") &&
-                it.contains("com.google.android.gsf") &&
-                it.contains("\"proxy\"")
-        }
-        val mtalk = serialized.indexOfFirst {
-            it.contains("mtalk.google.com") && it.contains("\"proxy\"")
-        }
-        val userDirectGms = serialized.indexOfFirst {
-            it.contains("com.google.android.gms") &&
-                it.contains("\"direct\"") &&
-                !it.contains("com.google.android.gsf")
-        }
-        val playList = serialized.indexOfFirst { it.contains("rs-google-play") }
-        assertTrue(pushTunnel >= 0)
-        assertTrue(mtalk > pushTunnel)
-        assertTrue(userDirectGms > mtalk)
-        assertTrue(playList > mtalk)
+        val root = Json.parseToJsonElement(json).jsonObject
+        val tun = root["inbounds"]!!.jsonArray.first().jsonObject
+        val excluded = tun["exclude_package"]!!.jsonArray.map { it.jsonPrimitive.content }
+        assertEquals(
+            listOf(
+                "com.layer.app",
+                "com.google.android.gms",
+                "com.google.android.gsf",
+                "app.morphe.android.gms",
+            ),
+            excluded,
+        )
+        assertFalse(excluded.contains("app.morphe.android.youtube"))
+        assertEquals("false", tun["strict_route"]!!.jsonPrimitive.content)
+        val rules = root["route"]!!.jsonObject["rules"]!!.jsonArray.map { it.toString() }
+        assertTrue(rules.none { it.contains("mtalk.google.com") })
+        assertTrue(rules.none {
+            it.contains("com.google.android.gms") && it.contains("com.google.android.gsf")
+        })
     }
 
     @Test
@@ -221,39 +231,6 @@ class SingBoxConfigGeneratorTest {
     }
 
     @Test
-    fun playServicesDnsResolvesThroughTheVpnServer() {
-        val json = SingBoxConfigGenerator.generate(
-            uuid = sampleUuid,
-            settings = sampleSettings,
-            appRules = emptyList(),
-            domainRules = emptyList(),
-            ownPackageName = "com.layer.app",
-        ).json
-        val root = Json.parseToJsonElement(json).jsonObject
-        val rules = root["dns"]!!.jsonObject["rules"]!!.jsonArray
-        val gms = rules.first { rule ->
-            rule.jsonObject["package_name"]?.toString().orEmpty()
-                .contains("com.google.android.gms") &&
-                rule.jsonObject["server"]?.jsonPrimitive?.content == "dns-proxy"
-        }.jsonObject
-        assertEquals("dns-proxy", gms["server"]!!.jsonPrimitive.content)
-        assertTrue(gms["package_name"]!!.jsonArray.any {
-            it.jsonPrimitive.content == "com.google.android.gsf"
-        })
-        val mtalk = rules.first { rule ->
-            rule.jsonObject["domain"]?.toString().orEmpty().contains("mtalk.google.com")
-        }.jsonObject
-        assertEquals("dns-proxy", mtalk["server"]!!.jsonPrimitive.content)
-        val dnsProxy = root["dns"]!!.jsonObject["servers"]!!.jsonArray
-            .first { it.jsonObject["tag"]!!.jsonPrimitive.content == "dns-proxy" }
-            .jsonObject
-        assertEquals("tcp", dnsProxy["type"]!!.jsonPrimitive.content)
-        assertEquals("8.8.8.8", dnsProxy["server"]!!.jsonPrimitive.content)
-        assertEquals("53", dnsProxy["server_port"]!!.jsonPrimitive.content)
-        assertEquals("proxy", dnsProxy["detour"]!!.jsonPrimitive.content)
-    }
-
-    @Test
     fun vpnListDnsGoesDirectNotThroughVision() {
         val json = SingBoxConfigGenerator.generate(
             uuid = sampleUuid,
@@ -273,13 +250,7 @@ class SingBoxConfigGeneratorTest {
         val autoDns = dnsRules.first { it.jsonObject.containsKey("rule_set") }.jsonObject
         assertEquals("dns-direct", autoDns["server"]!!.jsonPrimitive.content)
         val dnsServers = root["dns"]!!.jsonObject["servers"]!!.jsonArray
-        val detours = dnsServers.filter { it.jsonObject.containsKey("detour") }
-        assertEquals(1, detours.size)
-        assertEquals("dns-proxy", detours.single().jsonObject["tag"]!!.jsonPrimitive.content)
-        val dnsDirect = dnsServers.first {
-            it.jsonObject["tag"]!!.jsonPrimitive.content == "dns-direct"
-        }.jsonObject
-        assertFalse(dnsDirect.containsKey("detour"))
+        assertFalse(dnsServers.any { it.jsonObject.containsKey("detour") })
     }
 
     @Test

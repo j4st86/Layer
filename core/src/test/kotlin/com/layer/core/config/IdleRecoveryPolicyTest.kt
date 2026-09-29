@@ -1,6 +1,7 @@
 package com.layer.core.config
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -175,9 +176,13 @@ class IdleRecoveryPolicyTest {
     }
 
     @Test
-    fun idlePokeIsLongerThanDebounceAndShorterThanDozeWindow() {
-        assertTrue(IdleRecoveryPolicy.idlePokeMs > IdleRecoveryPolicy.debounceMs)
-        assertTrue(IdleRecoveryPolicy.idlePokeMs < 15 * 60 * 1000L)
+    fun idleAlarmIsTenToFifteenMinutesAndSkipsRecentTraffic() {
+        assertTrue(IdleRecoveryPolicy.idleAlarmMs >= 10 * 60 * 1000L)
+        assertTrue(IdleRecoveryPolicy.idleAlarmMs <= 15 * 60 * 1000L)
+        assertTrue(IdleRecoveryPolicy.idlePingLockMs <= 3_000L)
+        assertFalse(IdleRecoveryPolicy.shouldIdlePing(nowElapsed = 100_000L, lastTrafficElapsed = 90_000L))
+        assertTrue(IdleRecoveryPolicy.shouldIdlePing(nowElapsed = 400_000L, lastTrafficElapsed = 90_000L))
+        assertTrue(IdleRecoveryPolicy.shouldIdlePing(nowElapsed = 400_000L, lastTrafficElapsed = 0L))
     }
 
     @Test
