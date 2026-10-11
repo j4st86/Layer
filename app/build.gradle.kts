@@ -28,8 +28,8 @@ android {
         applicationId = "com.layer.app"
         minSdk = 34
         targetSdk = 36
-        versionCode = 29
-        versionName = "1.3.1-rc.10"
+        versionCode = 30
+        versionName = "1.3.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SINGBOX_TAG", "\"$singBoxTag\"")
     }
