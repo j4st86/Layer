@@ -28,8 +28,8 @@ android {
         applicationId = "com.layer.app"
         minSdk = 34
         targetSdk = 36
-        versionCode = 30
-        versionName = "1.3.1"
+        versionCode = 31
+        versionName = "1.3.2-rc.1"
         buildConfigField("String", "SINGBOX_TAG", "\"$singBoxTag\"")
     }
 
