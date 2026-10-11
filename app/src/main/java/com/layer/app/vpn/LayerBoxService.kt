@@ -18,6 +18,7 @@ import com.layer.app.data.RuleSetDownloader
 import com.layer.core.config.AutoServerPolicy
 import com.layer.core.config.IdleRecoveryPolicy
 import com.layer.core.config.RuleSetCatalog
+import com.layer.core.config.ServerDialAddress
 import com.layer.core.diagnostics.ErrorMapper
 import com.layer.core.diagnostics.LogSanitizer
 import kotlinx.coroutines.CoroutineScope
@@ -25,6 +26,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
@@ -44,12 +47,14 @@ internal class LayerBoxService(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lifecycleMutex = Mutex()
     private val notification by lazy { VpnNotification(vpn) }
+    private val rememberedDial = RememberedServerAddress(vpn)
 
     @Volatile
     var phase: VpnPhase = VpnPhase.Stopped
         private set
 
     private var box: LibboxSession? = null
+    private var resetJob: Job? = null
     private var serverName: String = ""
     private val idle = IdleRecovery(
         context = vpn,
@@ -131,6 +136,23 @@ internal class LayerBoxService(
 
     override fun recoverAfterHandoff(reason: String) = idle.recoverAfterHandoff(reason)
 
+    @Synchronized
+    override fun scheduleConnectionReset(iface: String) {
+        resetJob?.cancel()
+        resetJob = scope.launch {
+            delay(IdleRecoveryPolicy.interfaceSettleMs)
+            if (!phase.isSessionLive() || box == null) {
+                dbg("[VPN] event=recover path=handoff action=skip reason=reset-network why=not-live iface=$iface")
+                return@launch
+            }
+            dbg("[VPN] event=recover path=handoff action=reset-network iface=$iface")
+            runCatching { box?.resetNetwork() }
+                .onFailure {
+                    dbg("[VPN] event=recover path=handoff action=reset-network-failed error=${it.message} iface=$iface")
+                }
+        }
+    }
+
     private suspend fun start() = lifecycleMutex.withLock { startLocked() }
 
     private suspend fun reload() = lifecycleMutex.withLock { reloadLocked() }
@@ -144,6 +166,7 @@ internal class LayerBoxService(
     }
 
     private suspend fun startLocked() {
+        cancelConnectionReset()
         if (phase != VpnPhase.Starting) return
         if (box != null && phase.isSessionLive()) {
             dbg("[VPN] event=start action=skip reason=already-running state=${phase.toUi()}")
@@ -177,15 +200,8 @@ internal class LayerBoxService(
                 "flow=${settings.server.flow} network=${settings.server.network} " +
                 "reality=${settings.server.isReality}",
         )
-        val resolved = UnderlyingDns.resolve(vpn, host)
-        if (resolved.ip != null) {
-            dbg("[DNS] event=pre-resolve host=$host ip=${resolved.ip}")
-        } else {
-            dbg(
-                "[DNS] event=pre-resolve host=$host ip=miss" +
-                    (resolved.error?.let { " error=$it" } ?: ""),
-            )
-        }
+        val dialIp = resolveDialAddress(host) { phase == VpnPhase.Starting }
+        if (phase != VpnPhase.Starting) return
         if (settings.server.isReality) {
             dbg(
                 "[VPN] event=reality dest=${settings.server.serverName} " +
@@ -196,7 +212,7 @@ internal class LayerBoxService(
         val prepared = prepareLists()
         if (phase != VpnPhase.Starting) return
         val generated = container.repository.buildConfig(
-            resolved.ip,
+            dialIp,
             prepared.ruleSets,
             remoteRuleSetFallback = false,
             adBlockRuleSetPath = prepared.adBlockPath,
@@ -230,13 +246,14 @@ internal class LayerBoxService(
                 dbg("[AUTO] event=monitor action=skip reason=too-few-servers count=${settings.servers.size}")
             }
             container.connectionPing.measureAfterConnected("connected")
-            tryPromoteRuleSetsViaProxy(resolved.ip, prepared)
+            tryPromoteRuleSetsViaProxy(dialIp, prepared)
         } catch (error: Exception) {
             failLocked(combineErrors(error))
         }
     }
 
     private suspend fun reloadLocked() {
+        cancelConnectionReset()
         if (phase == VpnPhase.Stopping || phase == VpnPhase.Stopped) return
         if (box == null) {
             dbg("[VPN] event=reload action=start-vpn reason=no-command-server")
@@ -251,12 +268,13 @@ internal class LayerBoxService(
         dbg("[VPN] event=reload server=$serverName")
         updateStatus(VpnConnectionState.RECONNECTING, vpn.getString(R.string.status_reconnecting))
         val host = settings.server.address
-        val resolved = UnderlyingDns.resolve(vpn, host)
+        val dialIp = resolveDialAddress(host) { phase == VpnPhase.Reloading }
+        if (phase != VpnPhase.Reloading) return
         val prepared = prepareLists()
         val wantRemoteLists = settings.automaticRuleSetEnabled &&
             prepared.ruleSets.size < RuleSetCatalog.vpnLists.size
         val generated = container.repository.buildConfig(
-            resolved.ip,
+            dialIp,
             prepared.ruleSets,
             remoteRuleSetFallback = wantRemoteLists,
             adBlockRuleSetPath = prepared.adBlockPath,
@@ -285,6 +303,45 @@ internal class LayerBoxService(
             // down again and Telegram's reconnect landed on a dying stack.
         } catch (error: Exception) {
             failLocked(combineErrors(error))
+        }
+    }
+
+    /**
+     * IP written into the VLESS server field. Null means dial the hostname.
+     * Retries only after a miss, so a normal connect does not wait.
+     */
+    private suspend fun resolveDialAddress(host: String, stillRunning: () -> Boolean): String? {
+        val trimmed = host.trim()
+        var attempt = 1
+        var resolved = UnderlyingDns.resolve(vpn, trimmed)
+        logResolve(trimmed, resolved, attempt)
+        while (resolved.ip == null && attempt <= ServerDialAddress.retryCount && stillRunning()) {
+            delay(ServerDialAddress.retryDelayMs)
+            if (!stillRunning()) return null
+            attempt++
+            resolved = UnderlyingDns.resolve(vpn, trimmed)
+            logResolve(trimmed, resolved, attempt)
+        }
+        if (!stillRunning()) return null
+        val fresh = resolved.ip
+        if (!fresh.isNullOrBlank()) rememberedDial.put(trimmed, fresh)
+        val chosen = ServerDialAddress.select(fresh, rememberedDial.get(trimmed))
+        if (fresh.isNullOrBlank() && chosen != null) {
+            dbg("[DNS] event=pre-resolve host=$trimmed ip=remembered value=$chosen")
+        } else if (chosen == null) {
+            dbg("[DNS] event=pre-resolve host=$trimmed ip=hostname")
+        }
+        return chosen
+    }
+
+    private fun logResolve(host: String, resolved: HostResolveResult, attempt: Int) {
+        if (resolved.ip != null) {
+            dbg("[DNS] event=pre-resolve host=$host ip=${resolved.ip} attempt=$attempt")
+        } else {
+            dbg(
+                "[DNS] event=pre-resolve host=$host ip=miss attempt=$attempt" +
+                    (resolved.error?.let { " error=$it" } ?: ""),
+            )
         }
     }
 
@@ -334,6 +391,12 @@ internal class LayerBoxService(
         dbg("[RULE] event=promote action=reverted reason=remote-lists-failed")
     }
 
+    @Synchronized
+    private fun cancelConnectionReset() {
+        resetJob?.cancel()
+        resetJob = null
+    }
+
     private fun ensureBox(): LibboxSession {
         box?.let { return it }
         return LibboxSession(
@@ -370,6 +433,7 @@ internal class LayerBoxService(
     }
 
     private fun teardownLocked(failed: Boolean, raw: String? = null) {
+        cancelConnectionReset()
         container.autoServerSelector.stopMonitoring()
         container.connectionPing.clear()
         idle.unregister()

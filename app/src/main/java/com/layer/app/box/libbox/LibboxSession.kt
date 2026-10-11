@@ -63,6 +63,10 @@ class LibboxSession(
         commandServer.wake()
     }
 
+    fun resetNetwork() {
+        commandServer.resetNetwork()
+    }
+
     fun close() {
         closed = true
         reattachJob?.cancel()

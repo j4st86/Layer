@@ -16,6 +16,7 @@ import android.os.Process
 import android.system.OsConstants
 import androidx.core.content.ContextCompat
 import com.layer.app.box.BoxHost
+import com.layer.core.config.IdleRecoveryPolicy
 import com.layer.core.config.RoutableDnsAnswers
 import com.layer.core.config.UidPackageCache
 import com.layer.app.vpn.AutoServerSelector
@@ -77,6 +78,7 @@ internal class SingBoxPlatform(
     private var tunReady = false
     private var publishedUnderlying: Network? = null
     private var publishedUnderlyingSet = false
+    private var publishedIfaceName = ""
     private var lastValidated = false
     private var lastIfaceLog = ""
 
@@ -127,6 +129,7 @@ internal class SingBoxPlatform(
         tunReady = false
         publishedUnderlying = null
         publishedUnderlyingSet = false
+        publishedIfaceName = ""
         runCatching { vpn.unregisterReceiver(packageReceiver) }
         uidPackages.clear()
     }
@@ -240,7 +243,13 @@ internal class SingBoxPlatform(
                 publishedUnderlyingSet = true
                 publishedUnderlying = network
                 val name = network?.let { connectivity.getLinkProperties(it)?.interfaceName }.orEmpty()
-                host.dbg("[NET] event=underlying-networks iface=${name.ifEmpty { "none" }}")
+                val published = name.ifEmpty { "none" }
+                val previous = publishedIfaceName
+                publishedIfaceName = published
+                host.dbg("[NET] event=underlying-networks iface=$published")
+                if (IdleRecoveryPolicy.shouldResetConnections(previous, published)) {
+                    host.scheduleConnectionReset(published)
+                }
             }
             .onFailure {
                 host.dbg("[NET] event=underlying-networks action=fail error=${it.message}")

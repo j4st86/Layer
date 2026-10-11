@@ -186,6 +186,19 @@ class IdleRecoveryPolicyTest {
     }
 
     @Test
+    fun connectionResetFollowsAnInterfaceChangeAfterTheFirstPublish() {
+        assertFalse(IdleRecoveryPolicy.shouldResetConnections(null, "wwan1"))
+        assertFalse(IdleRecoveryPolicy.shouldResetConnections("", "wwan1"))
+        assertFalse(IdleRecoveryPolicy.shouldResetConnections("wlan0", "wlan0"))
+        assertFalse(IdleRecoveryPolicy.shouldResetConnections("wlan0", "none"))
+        assertFalse(IdleRecoveryPolicy.shouldResetConnections("wlan0", ""))
+        assertTrue(IdleRecoveryPolicy.shouldResetConnections("wlan0", "wwan1"))
+        assertTrue(IdleRecoveryPolicy.shouldResetConnections("wwan1", "wlan0"))
+        assertTrue(IdleRecoveryPolicy.shouldResetConnections("none", "wwan1"))
+        assertEquals(5_000L, IdleRecoveryPolicy.interfaceSettleMs)
+    }
+
+    @Test
     fun handoffWakeSkipsWhenThereIsNoNetwork() {
         assertEquals(
             IdleRecoveryPolicy.Action.Skip,

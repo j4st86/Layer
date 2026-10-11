@@ -9,6 +9,9 @@ import android.net.NetworkCapabilities
 interface BoxHost {
     fun dbg(message: String)
     fun recoverAfterHandoff(reason: String)
+
+    /** Underlying iface name changed. The host closes dead app sockets after a settle delay. */
+    fun scheduleConnectionReset(iface: String)
     fun notifyAutoServerTransport(capabilities: NetworkCapabilities)
     fun onTunDump(dump: String)
 }
