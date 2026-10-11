@@ -47,7 +47,7 @@ internal class LayerBoxService(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lifecycleMutex = Mutex()
     private val notification by lazy { VpnNotification(vpn) }
-    private val rememberedDial = RememberedServerAddress(vpn)
+    private val rememberedDial by lazy { RememberedServerAddress(vpn) }
 
     @Volatile
     var phase: VpnPhase = VpnPhase.Stopped
