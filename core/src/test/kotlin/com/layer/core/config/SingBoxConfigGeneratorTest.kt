@@ -428,14 +428,14 @@ class SingBoxConfigGeneratorTest {
             ),
             ownPackageName = "com.layer.app",
             adBlockPackages = listOf("org.telegram.messenger"),
-            adBlockRuleSetPath = "/data/adblock/dns-ad-filter.json",
+            adBlockRuleSetPath = "/data/adblock/hagezi-pro.srs",
         ).json
         val root = Json.parseToJsonElement(json).jsonObject
         val ruleSets = root["route"]!!.jsonObject["rule_set"]!!.jsonArray
         val ads = ruleSets.first { it.jsonObject["tag"]!!.jsonPrimitive.content == "rs-ads" }.jsonObject
         assertEquals("local", ads["type"]!!.jsonPrimitive.content)
-        assertEquals("source", ads["format"]!!.jsonPrimitive.content)
-        assertEquals("/data/adblock/dns-ad-filter.json", ads["path"]!!.jsonPrimitive.content)
+        assertEquals("binary", ads["format"]!!.jsonPrimitive.content)
+        assertEquals("/data/adblock/hagezi-pro.srs", ads["path"]!!.jsonPrimitive.content)
 
         val routeRules = root["route"]!!.jsonObject["rules"]!!.jsonArray
         val serialized = routeRules.map { it.toString() }
@@ -475,10 +475,10 @@ class SingBoxConfigGeneratorTest {
             appRules = emptyList(),
             domainRules = emptyList(),
             ownPackageName = "com.layer.app",
-            adBlockRuleSetPath = "/data/adblock/dns-ad-filter.json",
+            adBlockRuleSetPath = "/data/adblock/hagezi-pro.srs",
         ).json
         assertFalse(json.contains("rs-ads"))
-        assertFalse(json.contains("dns-ad-filter.json"))
+        assertFalse(json.contains("hagezi-pro.srs"))
     }
 
     @Test

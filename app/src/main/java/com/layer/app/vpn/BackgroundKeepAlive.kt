@@ -1,5 +1,6 @@
 package com.layer.app.vpn
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.ActivityManager
 import android.app.AppOpsManager
@@ -13,17 +14,20 @@ import android.os.Build
 import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
+import androidx.core.net.toUri
 import com.layer.app.R
 import com.layer.core.config.OemKeepAlivePolicy
 
 /**
- * Android does not let an app turn on Unrestricted battery usage by itself.
- * Layer treats only Unrestricted as OK: Optimized can still be frozen or
- * have "Allow background usage" turned off by the system.
+ * Optimized battery is enough. The VPN is a foreground service, so Doze does
+ * not cut its Wi-Fi or LTE tunnel, and the idle alarm uses
+ * [android.app.AlarmManager.setAndAllowWhileIdle], which fires without the
+ * Unrestricted allowlist.
  *
- * "Allow background usage" off is AppOps RUN_ANY_IN_BACKGROUND = ignored.
- * [ActivityManager.isBackgroundRestricted] does not always match that toggle
- * on Android 14+ and OEM skins, so both signals are checked.
+ * Restricted is the failure: "Allow background usage" off
+ * (AppOps RUN_ANY_IN_BACKGROUND = ignored) or
+ * [ActivityManager.isBackgroundRestricted]. Both are checked, because Android
+ * 14+ and OEM skins do not always agree.
  *
  * HyperOS / MIUI "No restrictions" does not set the AOSP ignore-battery
  * whitelist. On that family a clear background-restricted flag is enough.
@@ -34,6 +38,9 @@ object BackgroundKeepAlive {
         OPTIMIZED,
         RESTRICTED,
     }
+
+    /** Unrestricted and Optimized keep the tunnel up. Restricted does not. */
+    fun isSufficient(status: Status): Boolean = status != Status.RESTRICTED
 
     fun status(context: Context): Status {
         if (isBackgroundRestricted(context)) return Status.RESTRICTED
@@ -105,7 +112,7 @@ object BackgroundKeepAlive {
             )
             add(
                 Intent("android.settings.APP_BATTERY_SETTINGS").apply {
-                    data = Uri.parse("package:$pkg")
+                    data = "package:$pkg".toUri()
                     putExtra("android.provider.extra.APP_PACKAGE", pkg)
                 },
             )
@@ -154,6 +161,7 @@ object BackgroundKeepAlive {
         else -> mode.toString()
     }
 
+    @SuppressLint("PrivateApi")
     private fun systemProperty(key: String): String? {
         return runCatching {
             val clazz = Class.forName("android.os.SystemProperties")

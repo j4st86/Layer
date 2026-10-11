@@ -39,7 +39,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -60,7 +61,8 @@ fun AppPickerSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val sheetColor = MaterialTheme.colorScheme.surfaceContainerLow
-    val sheetHeight = LocalConfiguration.current.screenHeightDp.dp * 0.94f
+    val windowHeight = LocalWindowInfo.current.containerSize.height
+    val sheetHeight = with(LocalDensity.current) { windowHeight.toDp() } * 0.94f
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,

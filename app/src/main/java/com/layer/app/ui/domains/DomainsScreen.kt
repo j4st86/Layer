@@ -41,7 +41,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -64,15 +63,16 @@ fun DomainsScreen() {
     val undo by viewModel.undo.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
-    val context = LocalContext.current
+    val removedMessage = stringResource(R.string.rule_removed)
+    val undoLabel = stringResource(R.string.action_undo)
     var showAdd by remember { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
 
-    LaunchedEffect(undo) {
+    LaunchedEffect(undo, removedMessage, undoLabel) {
         val rule = undo ?: return@LaunchedEffect
         val result = snackbar.showSnackbar(
-            context.getString(R.string.rule_removed),
-            context.getString(R.string.action_undo),
+            removedMessage,
+            undoLabel,
             duration = SnackbarDuration.Short,
         )
         if (result == SnackbarResult.ActionPerformed) viewModel.undoRemove() else viewModel.consumeUndo()

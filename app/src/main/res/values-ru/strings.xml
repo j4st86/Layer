@@ -42,8 +42,8 @@
     <string name="add_server_or_subscription">Добавить сервер или подписку</string>
     <string name="subscription_added">Подписка добавлена</string>
     <string name="server_added">Сервер добавлен</string>
-    <string name="battery_snackbar">Отключите оптимизацию батареи для стабильной работы</string>
-    <string name="battery_snackbar_xiaomi">Включите «Нет ограничений» в экономии батареи для стабильной работы</string>
+    <string name="battery_snackbar">Работа в фоне выключена. Включите её. Для VPN достаточно режима «Оптимизация».</string>
+    <string name="battery_snackbar_xiaomi">Работа в фоне выключена. Включите её в настройках батареи. Режима по умолчанию достаточно.</string>
     <string name="recommended_apps_prompt">Добавить рекомендуемые приложения?</string>
 
     <string name="add_title">Добавить</string>
@@ -130,13 +130,10 @@
     <string name="settings_check_updates_sub">Установлена версия %1$s</string>
     <string name="settings_auto_updates">Автопроверка</string>
     <string name="settings_auto_updates_sub">Проверять GitHub раз в 7 дней</string>
-    <string name="update_checking">Проверка…</string>
-    <string name="update_up_to_date">У вас последняя версия (%1$s)</string>
     <string name="update_available_title">Есть обновление</string>
     <string name="update_available_body">Установлено: %1$s\nНа GitHub: %2$s</string>
     <string name="update_download">Скачать</string>
     <string name="update_later">Позже</string>
-    <string name="update_check_failed">Не удалось проверить обновления</string>
     <string name="report_saved">Отчёт сохранён: %1$s</string>
     <string name="report_failed">Не удалось отправить отчёт</string>
     <string name="settings_reset">Сброс</string>
@@ -154,11 +151,11 @@
     <string name="settings_reset_all_body">VPN отключится. Ключ, сервер и правила будут удалены.</string>
     <string name="background_usage">Работа в фоне</string>
     <string name="battery_unrestricted">Без ограничений</string>
-    <string name="battery_optimized">Сейчас «Оптимизация». Нужен режим «Без ограничений», иначе Android может выгрузить VPN.</string>
-    <string name="battery_restricted">Выключена — включите «Разрешить работу в фоне» и выберите «Без ограничений».</string>
+    <string name="battery_optimized">Оптимизация. Для VPN этого достаточно.</string>
+    <string name="battery_restricted">Фон выключен. Включите «Разрешить работу в фоне». Режима «Оптимизация» достаточно.</string>
     <string name="battery_unrestricted_xiaomi">Нет ограничений</string>
-    <string name="battery_optimized_xiaomi">Сейчас экономия батареи. Нужен режим «Нет ограничений», иначе система может выгрузить VPN.</string>
-    <string name="battery_restricted_xiaomi">Выключена — включите работу в фоне и выберите «Нет ограничений».</string>
+    <string name="battery_optimized_xiaomi">Экономия батареи включена. Этого достаточно, пока разрешена работа в фоне.</string>
+    <string name="battery_restricted_xiaomi">Фон выключен. Включите работу в фоне. Режим «Нет ограничений» не обязателен.</string>
     <string name="battery_settings">Настройки батареи</string>
     <string name="always_on_hint">Чтобы VPN поднимался после перезагрузки, включите это в системе.</string>
     <string name="vpn_settings">Настройки VPN</string>

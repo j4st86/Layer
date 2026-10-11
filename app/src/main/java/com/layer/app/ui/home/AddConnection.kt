@@ -26,7 +26,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.common.api.CommonStatusCodes
 import com.google.mlkit.vision.barcode.common.Barcode
@@ -85,7 +84,7 @@ fun scanConnectionQr(context: Context, onResult: (Result<String>) -> Unit) {
         onResult(Result.failure(error))
         return
     }
-    val main = ContextCompat.getMainExecutor(context)
+    val main = context.mainExecutor
     runCatching {
         scanner.startScan()
             .addOnSuccessListener(main) { barcode ->

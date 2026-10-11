@@ -9,7 +9,6 @@ import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.os.PowerManager
 import android.os.SystemClock
-import androidx.core.content.ContextCompat
 import com.layer.core.config.IdleRecoveryPolicy
 
 /**
@@ -181,12 +180,7 @@ internal class IdleRecovery(
             addAction(Intent.ACTION_USER_PRESENT)
             addAction(PowerManager.ACTION_DEVICE_IDLE_MODE_CHANGED)
         }
-        ContextCompat.registerReceiver(
-            context,
-            screenReceiver,
-            filter,
-            ContextCompat.RECEIVER_NOT_EXPORTED,
-        )
+        context.registerReceiver(screenReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
         VpnStatusStore.trafficListener = { onTunnelTraffic() }
         val interactive = context.getSystemService(PowerManager::class.java)?.isInteractive != false
         screenOff = !interactive

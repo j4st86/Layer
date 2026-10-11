@@ -42,8 +42,8 @@
     <string name="add_server_or_subscription">Add a server or subscription</string>
     <string name="subscription_added">Subscription added</string>
     <string name="server_added">Server added</string>
-    <string name="battery_snackbar">Turn off battery optimization for a stable VPN</string>
-    <string name="battery_snackbar_xiaomi">Set battery saver to No restrictions for a stable VPN</string>
+    <string name="battery_snackbar">Background usage is off. Turn it on. Optimized battery is enough for the VPN.</string>
+    <string name="battery_snackbar_xiaomi">Background usage is off. Turn it on in battery settings. The default saver is enough.</string>
     <string name="recommended_apps_prompt">Add recommended apps?</string>
 
     <string name="add_title">Add</string>
@@ -128,13 +128,10 @@
     <string name="settings_check_updates_sub">Installed version %1$s</string>
     <string name="settings_auto_updates">Automatic checks</string>
     <string name="settings_auto_updates_sub">Check GitHub every 7 days</string>
-    <string name="update_checking">Checking…</string>
-    <string name="update_up_to_date">You have the latest version (%1$s)</string>
     <string name="update_available_title">Update available</string>
     <string name="update_available_body">Installed: %1$s\nGitHub: %2$s</string>
     <string name="update_download">Download</string>
     <string name="update_later">Later</string>
-    <string name="update_check_failed">Could not check for updates</string>
     <string name="report_saved">Report saved: %1$s</string>
     <string name="report_failed">Could not send the report</string>
     <string name="settings_reset">Reset</string>
@@ -152,11 +149,11 @@
     <string name="settings_reset_all_body">The VPN will disconnect. The key, server and rules will be deleted.</string>
     <string name="background_usage">Background usage</string>
     <string name="battery_unrestricted">Unrestricted</string>
-    <string name="battery_optimized">It is set to Optimized. Choose Unrestricted, or Android may unload the VPN.</string>
-    <string name="battery_restricted">Disabled — turn on Allow background usage and choose Unrestricted.</string>
+    <string name="battery_optimized">Optimized. This is enough for the VPN.</string>
+    <string name="battery_restricted">Background usage is off. Turn it on. Optimized is enough.</string>
     <string name="battery_unrestricted_xiaomi">No restrictions</string>
-    <string name="battery_optimized_xiaomi">Battery saver is on. Choose No restrictions, or HyperOS may unload the VPN.</string>
-    <string name="battery_restricted_xiaomi">Disabled — turn on background usage and choose No restrictions.</string>
+    <string name="battery_optimized_xiaomi">Battery saver is on. This is enough while background usage stays allowed.</string>
+    <string name="battery_restricted_xiaomi">Background usage is off. Turn it on. No restrictions is not required.</string>
     <string name="battery_settings">Battery settings</string>
     <string name="always_on_hint">To bring the VPN back after a reboot, enable this in system settings.</string>
     <string name="vpn_settings">VPN settings</string>

@@ -33,6 +33,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
@@ -59,6 +60,7 @@ fun DeveloperScreen(
 ) {
     val container = LocalAppContainer.current
     val context = LocalContext.current
+    val resources = LocalResources.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val vpn = container.vpnController.status.collectAsStateWithLifecycle().value
@@ -138,7 +140,7 @@ fun DeveloperScreen(
                         modifier = Modifier.clickable {
                             context.getSystemService(ClipboardManager::class.java)
                                 ?.setPrimaryClip(ClipData.newPlainText("operator", OPERATOR_URL))
-                            scope.launch { snackbar.showSnackbar(context.getString(R.string.navi_link_copied)) }
+                            scope.launch { snackbar.showSnackbar(resources.getString(R.string.navi_link_copied)) }
                         },
                     )
                     Text(

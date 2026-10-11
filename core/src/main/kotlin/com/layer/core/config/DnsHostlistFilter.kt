@@ -2,13 +2,15 @@ package com.layer.core.config
 
 import com.layer.core.routing.HostnameNormalizer
 import java.io.File
+import java.io.OutputStream
 import java.io.Reader
 import java.io.Writer
 
 /**
  * Turns an ABP-style DNS hostlist (`||domain^`, `@@||domain^`) into a sing-box
- * source rule-set. The text list is not a legal sing-box source format, so
- * Layer writes `domain_suffix` JSON.
+ * rule-set. The text list is not a legal sing-box source format.
+ * [writeBinary] is what the VPN loads. [writeSourceJson] is the same rules
+ * in the source format, kept for tests.
  */
 data class DnsHostlistFilterSet(
     val block: List<String>,
@@ -17,9 +19,13 @@ data class DnsHostlistFilterSet(
 ) {
     val isUsable: Boolean get() = block.size >= MIN_BLOCK_RULES
 
-    fun writeSourceJson(destination: File) {
+    fun writeBinary(destination: File) {
         destination.parentFile?.mkdirs()
-        destination.bufferedWriter().use { writeSourceJson(it) }
+        destination.outputStream().use { writeBinary(it) }
+    }
+
+    fun writeBinary(out: OutputStream) {
+        RuleSetBinary.write(out, block, allow)
     }
 
     fun writeSourceJson(out: Writer) {

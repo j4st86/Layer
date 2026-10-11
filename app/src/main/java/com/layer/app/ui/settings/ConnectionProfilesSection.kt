@@ -41,7 +41,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
@@ -72,7 +72,7 @@ fun ConnectionProfilesSection(
     var deletingSubscription by remember { mutableStateOf<SavedSubscription?>(null) }
     val listColors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
     val expandedGroups = remember { mutableStateMapOf<String, Boolean>() }
-    val context = LocalContext.current
+    val resources = LocalResources.current
     val manual = settings.manualServers()
 
     Text(stringResource(R.string.servers), style = MaterialTheme.typography.titleMedium)
@@ -126,9 +126,9 @@ fun ConnectionProfilesSection(
                                 onClick = {
                                     onRefreshSubscription(subscription.id) { result ->
                                         onMessage(
-                                            if (result.isSuccess) context.getString(R.string.subscription_updated)
+                                            if (result.isSuccess) resources.getString(R.string.subscription_updated)
                                             else result.exceptionOrNull()?.message
-                                                ?: context.getString(R.string.subscription_update_failed),
+                                                ?: resources.getString(R.string.subscription_update_failed),
                                         )
                                     }
                                 },
@@ -178,9 +178,9 @@ fun ConnectionProfilesSection(
                 onUpdateServer(server.id, note, fingerprint) { result ->
                     if (result.isSuccess) {
                         editing = null
-                        onMessage(context.getString(R.string.params_saved))
+                        onMessage(resources.getString(R.string.params_saved))
                     } else {
-                        onMessage(result.exceptionOrNull()?.message ?: context.getString(R.string.save_failed))
+                        onMessage(result.exceptionOrNull()?.message ?: resources.getString(R.string.save_failed))
                     }
                 }
             },
@@ -194,9 +194,9 @@ fun ConnectionProfilesSection(
                 onUpdateSubscriptionNote(subscription.id, note) { result ->
                     if (result.isSuccess) {
                         editingSubscription = null
-                        onMessage(context.getString(R.string.params_saved))
+                        onMessage(resources.getString(R.string.params_saved))
                     } else {
-                        onMessage(result.exceptionOrNull()?.message ?: context.getString(R.string.save_failed))
+                        onMessage(result.exceptionOrNull()?.message ?: resources.getString(R.string.save_failed))
                     }
                 }
             },

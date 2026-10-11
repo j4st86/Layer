@@ -9,13 +9,16 @@ package com.layer.core.config
  * cellular is not charged ~5 MB; itdog lists still download on mobile.
  * A copy of [BUNDLED_VERSION] ships in assets/adblock if the feed is gone
  * on first enable. Refresh with scripts/fetch-adblock.sh.
+ * The phone compiles that text into [ruleSetFileName] once per refresh.
+ * sing-box then loads the binary file instead of parsing the host list
+ * on every connect.
  */
 object AdBlockPolicy {
     const val TAG = "rs-ads"
     const val listUrl =
         "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/adblock/pro.txt"
     const val fileName = "hagezi-pro.txt"
-    const val ruleSetFileName = "hagezi-pro.json"
+    const val ruleSetFileName = "hagezi-pro.srs"
     const val ASSET_DIR = "adblock"
     const val BUNDLED_VERSION = "2026.0921.0824.43"
     const val UPDATE_INTERVAL = RuleSetCatalog.UPDATE_INTERVAL

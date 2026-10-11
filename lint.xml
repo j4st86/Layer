@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<lint>
+    <!-- Version upgrades are reviewed deliberately; they must not make a
+         previously clean source tree fail when a repository publishes. -->
+    <issue id="AndroidGradlePluginVersion" severity="ignore" />
+    <issue id="GradleDependency" severity="ignore" />
+    <issue id="NewerVersionAvailable" severity="ignore" />
+
+    <!-- compileSdk 37 is used for Android 17 testing, while targetSdk 36 stays
+         pinned until the target-37 behavior changes have been validated. -->
+    <issue id="OldTargetApi" severity="ignore" />
+
+    <!-- Legacy launchers need both conventional and round names even when the
+         current artwork is intentionally identical. -->
+    <issue id="IconDuplicates" severity="ignore" />
+</lint>

@@ -28,6 +28,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -43,6 +44,7 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
     val container = LocalAppContainer.current
     val entries by container.diagnostics.entries.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val resources = LocalResources.current
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     Scaffold(
@@ -62,8 +64,8 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
                                 val result = DiagnosticReport.share(context, container)
                                 snackbar.showSnackbar(
                                     result.fold(
-                                        onSuccess = { context.getString(R.string.report_saved, it) },
-                                        onFailure = { it.message ?: context.getString(R.string.report_failed) },
+                                        onSuccess = { resources.getString(R.string.report_saved, it) },
+                                        onFailure = { it.message ?: resources.getString(R.string.report_failed) },
                                     ),
                                 )
                             }

@@ -14,7 +14,6 @@ import android.net.VpnService
 import android.os.Build
 import android.os.Process
 import android.system.OsConstants
-import androidx.core.content.ContextCompat
 import com.layer.app.box.BoxHost
 import com.layer.core.config.IdleRecoveryPolicy
 import com.layer.core.config.RoutableDnsAnswers
@@ -63,12 +62,7 @@ internal class SingBoxPlatform(
             addAction(Intent.ACTION_PACKAGE_REPLACED)
             addDataScheme("package")
         }
-        ContextCompat.registerReceiver(
-            vpn,
-            packageReceiver,
-            filter,
-            ContextCompat.RECEIVER_NOT_EXPORTED,
-        )
+        vpn.registerReceiver(packageReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
     }
 
     @Volatile

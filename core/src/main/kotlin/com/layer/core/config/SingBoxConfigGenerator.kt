@@ -421,7 +421,7 @@ object SingBoxConfigGenerator {
                     RuleSet(
                         tag = AdBlockPolicy.TAG,
                         type = "local",
-                        format = "source",
+                        format = "binary",
                         path = adBlockPath,
                     ),
                 )

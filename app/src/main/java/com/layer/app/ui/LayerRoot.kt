@@ -94,6 +94,7 @@ fun LayerRoot(container: AppContainer) {
     val pagerState = rememberPagerState(pageCount = { 5 })
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val oneLayerLeft = stringResource(R.string.navi_one_layer_left)
     val haptic = LocalHapticFeedback.current
     val naviTaps = remember { HiddenTapGate() }
     val backStack by navController.currentBackStackEntryAsState()
@@ -131,7 +132,7 @@ fun LayerRoot(container: AppContainer) {
                                             is HiddenTapResult.Progress -> if (result.remaining == 1) {
                                                 Toast.makeText(
                                                     context,
-                                                    context.getString(R.string.navi_one_layer_left),
+                                                    oneLayerLeft,
                                                     Toast.LENGTH_SHORT,
                                                 ).show()
                                             }

@@ -61,6 +61,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.layer.app.R
@@ -86,6 +87,7 @@ fun SettingsScreen() {
     val updateUi by viewModel.updateUi.collectAsStateWithLifecycle()
     val autoCheckEnabled by viewModel.autoCheckEnabled.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val resources = LocalResources.current
     val settings = snapshot.settings
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -213,8 +215,8 @@ fun SettingsScreen() {
                             }
                             snackbar.showSnackbar(
                                 result.fold(
-                                    onSuccess = { context.getString(R.string.report_saved, it) },
-                                    onFailure = { it.message ?: context.getString(R.string.report_failed) },
+                                    onSuccess = { resources.getString(R.string.report_saved, it) },
+                                    onFailure = { it.message ?: resources.getString(R.string.report_failed) },
                                 ),
                             )
                         }
@@ -401,7 +403,7 @@ private fun StabilityChecklist(
             )
             HorizontalDivider()
             ChecklistRow(
-                ok = keepAlive == BackgroundKeepAlive.Status.UNRESTRICTED,
+                ok = BackgroundKeepAlive.isSufficient(keepAlive),
                 title = stringResource(R.string.background_usage),
                 subtitle = when (keepAlive) {
                     BackgroundKeepAlive.Status.UNRESTRICTED -> stringResource(

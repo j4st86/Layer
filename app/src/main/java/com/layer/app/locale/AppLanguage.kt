@@ -3,6 +3,7 @@ package com.layer.app.locale
 import android.content.Context
 import android.content.res.Resources
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.content.edit
 import androidx.core.os.LocaleListCompat
 import com.layer.app.box.BoxRuntime
 import com.layer.core.i18n.UiLanguage
@@ -40,10 +41,9 @@ object AppLanguagePreferences {
     }
 
     fun set(context: Context, language: AppLanguage) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY, language.storageKey)
-            .apply()
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit {
+            putString(KEY, language.storageKey)
+        }
         apply(language)
     }
 

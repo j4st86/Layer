@@ -7,7 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.pm.ServiceInfo
-import androidx.core.app.NotificationCompat
+import android.graphics.drawable.Icon
 import com.layer.app.MainActivity
 import com.layer.app.R
 
@@ -42,17 +42,27 @@ class VpnNotification(private val service: Service) {
             VpnConnectionState.CONNECTING -> service.getString(R.string.status_connecting_ellipsis)
             else -> service.getString(R.string.app_name)
         }
-        return NotificationCompat.Builder(service, CHANNEL_ID)
+        return Notification.Builder(service, CHANNEL_ID)
             .setContentTitle(title)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(open)
-            .addAction(0, service.getString(R.string.notification_rewire), rewire)
-            .addAction(0, service.getString(R.string.notification_unwire), stop)
+            .addAction(action(service.getString(R.string.notification_rewire), rewire))
+            .addAction(action(service.getString(R.string.notification_unwire), stop))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setCategory(Notification.CATEGORY_SERVICE)
+            .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
             .build()
+    }
+
+    private fun action(title: String, intent: PendingIntent): Notification.Action {
+        // Action icons are required by the platform. Phones hide them and show
+        // the title; watches and notification listeners still receive the icon.
+        return Notification.Action.Builder(
+            Icon.createWithResource(service, R.drawable.ic_notification),
+            title,
+            intent,
+        ).build()
     }
 
     fun startForeground(state: VpnConnectionState, serverName: String? = null) {

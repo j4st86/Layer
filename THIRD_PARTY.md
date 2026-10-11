@@ -17,7 +17,8 @@ The file header (`! Title`, `! Homepage`, `! License`) is kept as required
 when conveying a GPL work. Some inputs in that list come from other authors
 with their own terms; GPL-3.0 covers the list as published by Hagezi.
 
-Refresh the snapshot with `./scripts/fetch-adblock.sh`.
+Refresh the snapshot with `./scripts/fetch-adblock.sh`. The app compiles
+this text into a sing-box binary rule-set (`hagezi-pro.srs`) on the phone.
 
 ## VPN domain lists
 
@@ -49,7 +50,8 @@ Layer не связан с авторами списков ниже и не яв
 Часть исходных данных у других авторов со своими условиями; GPL-3.0 покрывает
 список в том виде, в каком его публикует Hagezi.
 
-Обновление снимка: `./scripts/fetch-adblock.sh`.
+Обновление снимка: `./scripts/fetch-adblock.sh`. Приложение один раз
+компилирует этот текст в бинарный rule-set sing-box (`hagezi-pro.srs`).
 
 ## Списки доменов VPN
 

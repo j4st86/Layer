@@ -2,6 +2,7 @@ package com.layer.app.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import androidx.core.content.edit
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import kotlinx.serialization.encodeToString
@@ -49,7 +50,7 @@ class SecureCredentialsStore(context: Context) {
     fun hasUuid(serverId: String?): Boolean = getUuid(serverId).isNotBlank()
 
     fun clearAll() {
-        prefs.edit().remove(KEY_UUID_MAP).apply()
+        prefs.edit { remove(KEY_UUID_MAP) }
     }
 
     private fun readMap(): Map<String, String> {
@@ -59,7 +60,7 @@ class SecureCredentialsStore(context: Context) {
     }
 
     private fun writeMap(map: Map<String, String>) {
-        prefs.edit().putString(KEY_UUID_MAP, json.encodeToString(map)).apply()
+        prefs.edit { putString(KEY_UUID_MAP, json.encodeToString(map)) }
     }
 
     companion object {

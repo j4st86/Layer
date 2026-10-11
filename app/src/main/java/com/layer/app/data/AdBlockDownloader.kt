@@ -6,6 +6,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import com.layer.core.config.AdBlockPolicy
 import com.layer.core.config.DnsHostlistFilter
+import com.layer.core.config.RuleSetBinary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -51,12 +52,14 @@ class AdBlockDownloader(context: Context) {
     suspend fun ensureCopy(network: Network?): AdBlockFetch = mutex.withLock {
         withContext(Dispatchers.IO) {
             dir.mkdirs()
-            val json = ruleSetFile
+            val compiled = ruleSetFile
             val txt = filterFile
-            if (isFresh(json) && isUsableRuleSet(json)) {
+            if (isFresh(txt) && isUsableFilter(txt) &&
+                isFresh(compiled) && isUsableRuleSet(compiled)
+            ) {
                 return@withContext AdBlockFetch(
-                    path = json.absolutePath,
-                    bytes = json.length(),
+                    path = compiled.absolutePath,
+                    bytes = compiled.length(),
                     fromCache = true,
                     version = readVersion(txt),
                 )
@@ -84,14 +87,14 @@ class AdBlockDownloader(context: Context) {
                     fromAssets = true
                 }
             }
-            if (isUsableFilter(txt) && needsConvert(txt, json)) {
-                val converted = convert(txt, json)
+            if (isUsableFilter(txt) && needsConvert(txt, compiled)) {
+                val converted = convert(txt, compiled)
                 if (converted != null) error = converted
             }
-            if (isUsableRuleSet(json)) {
+            if (isUsableRuleSet(compiled)) {
                 return@withContext AdBlockFetch(
-                    path = json.absolutePath,
-                    bytes = json.length(),
+                    path = compiled.absolutePath,
+                    bytes = compiled.length(),
                     fromCache = !downloaded && !fromAssets,
                     fromAssets = fromAssets,
                     waitForWifi = waitForWifi,
@@ -126,7 +129,7 @@ class AdBlockDownloader(context: Context) {
             caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
     }
 
-    private fun convert(txt: File, json: File): String? {
+    private fun convert(txt: File, destination: File): String? {
         val parsed = runCatching {
             txt.bufferedReader().use { DnsHostlistFilter.parse(it) }
         }.getOrElse { return RemoteFileFetcher.describe(it) }
@@ -134,10 +137,11 @@ class AdBlockDownloader(context: Context) {
             return "too few rules (${parsed.block.size})"
         }
         val written = RemoteFileFetcher.copyStream(
-            write = { tmp -> parsed.writeSourceJson(tmp) },
-            destination = json,
+            write = { tmp -> parsed.writeBinary(tmp) },
+            destination = destination,
             minBytes = MIN_RULESET_BYTES,
         )
+        if (written) File(dir, LEGACY_SOURCE_NAME).delete()
         return if (written) null else "convert failed"
     }
 
@@ -181,12 +185,18 @@ class AdBlockDownloader(context: Context) {
 
     private fun isUsableFilter(file: File): Boolean = file.exists() && file.length() >= MIN_FILTER_BYTES
 
-    private fun isUsableRuleSet(file: File): Boolean = file.exists() && file.length() >= MIN_RULESET_BYTES
+    private fun isUsableRuleSet(file: File): Boolean {
+        if (!file.isFile || file.length() < MIN_RULESET_BYTES) return false
+        return runCatching {
+            file.inputStream().use(RuleSetBinary::isValid)
+        }.getOrDefault(false)
+    }
 
     companion object {
         private const val MIN_FILTER_BYTES = 50_000L
         private const val MIN_RULESET_BYTES = 10_000L
         private const val MIN_PARSED_RULES = 1_000
+        private const val LEGACY_SOURCE_NAME = "hagezi-pro.json"
 
         fun logLine(fetch: AdBlockFetch): String {
             val version = fetch.version?.let { " version=$it" }.orEmpty()

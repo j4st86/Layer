@@ -9,7 +9,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.StringWriter
+import java.util.zip.InflaterInputStream
 
 class DnsHostlistFilterTest {
     @Test
@@ -83,11 +86,86 @@ class DnsHostlistFilterTest {
     }
 
     @Test
+    fun binaryRuleSetMatchesSingBox1141() {
+        assertBinaryBody(
+            DnsHostlistFilter.parse("||ads.example.com^\n||tracker.test^\n"),
+            "010002000100000000240000000106b55555555555541d6d746f7363652e74652e6c7270656d6b6163786165722e74730a64610aff00",
+        )
+        assertBinaryBody(
+            DnsHostlistFilter.parse(
+                """
+                ||ads.example.com^
+                ||bbelements.com^
+                @@||safe.example.com^
+                """.trimIndent(),
+            ),
+            "010100020002000100000000000200000100000006aaaaaaaa116d6f632e656c706d6178652e656661730aff0100020001000000000c0000000100755555555554aa1b6d6f632e65736c74706e6d65616d7865656c2e6573626462610a0aff0000",
+        )
+        assertBinaryBody(
+            DnsHostlistFilter.parse(
+                """
+                ||ads.example.com^
+                ||track.example.com^
+                ||example.com^
+                ||a.b.test^
+                ||b.b.test^
+                ||other.net^
+                """.trimIndent(),
+            ),
+            "010002000100000a015800000002375552aaaaaaaa9400000000006d55532b6d746f6573636e652e2e7465722e6c656270682e6d746162616f0a0a780a650a2e6b7363646161720a740aff00",
+        )
+    }
+
+    @Test
+    fun binaryValidationRejectsCorruptionAndTruncation() {
+        val compiled = ByteArrayOutputStream().also {
+            DnsHostlistFilter.parse("||ads.example.com^\n||tracker.test^\n").writeBinary(it)
+        }.toByteArray()
+        assertTrue(RuleSetBinary.isValid(ByteArrayInputStream(compiled)))
+
+        val corrupted = compiled.copyOf()
+        corrupted[corrupted.size / 2] = (corrupted[corrupted.size / 2].toInt() xor 0x5A).toByte()
+        assertFalse(RuleSetBinary.isValid(ByteArrayInputStream(corrupted)))
+
+        val truncated = compiled.copyOf(compiled.size - 5)
+        assertFalse(RuleSetBinary.isValid(ByteArrayInputStream(truncated)))
+    }
+
+    @Test
+    fun bundledFilterCompilesToBinaryRuleSet() {
+        val file = bundledFilter() ?: return
+        val parsed = file.bufferedReader().use { DnsHostlistFilter.parse(it) }
+        val compiled = ByteArrayOutputStream().also { parsed.writeBinary(it) }.toByteArray()
+        assertEquals(0x53, compiled[0].toInt() and 0xFF)
+        assertEquals(0x52, compiled[1].toInt() and 0xFF)
+        assertEquals(0x53, compiled[2].toInt() and 0xFF)
+        assertEquals(RuleSetBinary.VERSION, compiled[3].toInt() and 0xFF)
+        assertTrue(RuleSetBinary.isValid(ByteArrayInputStream(compiled)))
+        assertTrue(compiled.size < file.length())
+        val body = inflateRuleSet(compiled)
+        assertEquals(1, body[0].toInt() and 0xFF)
+        assertEquals(0, body[1].toInt() and 0xFF)
+    }
+
+    private fun assertBinaryBody(parsed: DnsHostlistFilterSet, expectedBody: String) {
+        val compiled = ByteArrayOutputStream().also { parsed.writeBinary(it) }.toByteArray()
+        assertEquals(RuleSetBinary.VERSION, compiled[3].toInt() and 0xFF)
+        val body = inflateRuleSet(compiled)
+        assertEquals(expectedBody, body.joinToString("") { "%02x".format(it) })
+    }
+
+    private fun inflateRuleSet(compiled: ByteArray): ByteArray {
+        return InflaterInputStream(ByteArrayInputStream(compiled, 4, compiled.size - 4)).use { it.readBytes() }
+    }
+
+    private fun bundledFilter(): java.io.File? = listOf(
+        java.io.File("app/src/main/assets/adblock/${AdBlockPolicy.fileName}"),
+        java.io.File("../app/src/main/assets/adblock/${AdBlockPolicy.fileName}"),
+    ).firstOrNull { it.isFile }
+
+    @Test
     fun bundledFilterHasEnoughSuffixRules() {
-        val file = listOf(
-            java.io.File("app/src/main/assets/adblock/${AdBlockPolicy.fileName}"),
-            java.io.File("../app/src/main/assets/adblock/${AdBlockPolicy.fileName}"),
-        ).firstOrNull { it.isFile } ?: return
+        val file = bundledFilter() ?: return
         val parsed = file.bufferedReader().use { DnsHostlistFilter.parse(it) }
         assertTrue(parsed.block.size > 100_000)
         assertTrue(parsed.isUsable)

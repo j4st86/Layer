@@ -30,7 +30,6 @@ android {
         targetSdk = 36
         versionCode = 30
         versionName = "1.3.1"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SINGBOX_TAG", "\"$singBoxTag\"")
     }
 

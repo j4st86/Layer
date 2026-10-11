@@ -1,6 +1,7 @@
 package com.layer.app.vpn
 
 import android.content.Context
+import androidx.core.content.edit
 import com.layer.core.config.ServerDialAddress
 
 /**
@@ -20,7 +21,8 @@ internal class RememberedServerAddress(private val context: Context) {
 
     fun put(host: String, ip: String) {
         val clean = ServerDialAddress.rememberable(ip) ?: return
-        prefs.edit().putString(key(host), clean).commit()
+        // The address must survive an immediate process death after connect.
+        prefs.edit(commit = true) { putString(key(host), clean) }
     }
 
     private fun key(host: String): String = host.trim().lowercase()

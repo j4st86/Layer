@@ -1,6 +1,7 @@
 package com.layer.app.data
 
 import android.content.Context
+import androidx.core.content.edit
 import com.layer.app.BuildConfig
 import com.layer.core.config.AppVersion
 import com.layer.core.i18n.copy
@@ -28,7 +29,7 @@ class UpdateChecker(
     fun isAutoCheckEnabled(): Boolean = prefs.getBoolean(KEY_AUTO_ENABLED, true)
 
     fun setAutoCheckEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_AUTO_ENABLED, enabled).apply()
+        prefs.edit { putBoolean(KEY_AUTO_ENABLED, enabled) }
     }
 
     fun shouldAutoCheck(nowMs: Long = System.currentTimeMillis()): Boolean {
@@ -44,7 +45,7 @@ class UpdateChecker(
     }
 
     fun rememberDismissed(latest: String) {
-        prefs.edit().putString(KEY_DISMISSED, AppVersion.normalize(latest)).apply()
+        prefs.edit { putString(KEY_DISMISSED, AppVersion.normalize(latest)) }
     }
 
     suspend fun check(force: Boolean, nowMs: Long = System.currentTimeMillis()): UpdateCheckResult {
@@ -52,7 +53,7 @@ class UpdateChecker(
             return UpdateCheckResult.UpToDate(installedVersion, installedVersion)
         }
         val result = withContext(Dispatchers.IO) { client.fetchLatest() }
-        prefs.edit().putLong(KEY_LAST_CHECK_MS, nowMs).apply()
+        prefs.edit { putLong(KEY_LAST_CHECK_MS, nowMs) }
         return result.fold(
             onSuccess = { release ->
                 if (AppVersion.isNewer(installedVersion, release.tag)) {

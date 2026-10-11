@@ -132,7 +132,7 @@ fun HomeScreen() {
         },
         snackbarHost = {
             Column {
-                if (keepAlive != BackgroundKeepAlive.Status.UNRESTRICTED) {
+                if (!BackgroundKeepAlive.isSufficient(keepAlive)) {
                     UnrestrictedBatterySnackbar(
                         xiaomiFamily = BackgroundKeepAlive.isXiaomiFamily(context),
                         onOpenSettings = { BackgroundKeepAlive.requestFix(context) },
