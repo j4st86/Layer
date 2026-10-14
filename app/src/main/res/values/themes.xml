@@ -6,7 +6,7 @@
         <item name="android:enforceNavigationBarContrast">false</item>
     </style>
 
-    <style name="Theme.Layer.Splash" parent="@android:style/Theme.SplashScreen">
+    <style name="Theme.Layer.Splash" parent="Theme.Layer">
         <item name="android:windowSplashScreenBackground">@color/splash_background</item>
         <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
         <item name="android:windowSplashScreenIconBackgroundColor">@color/splash_background</item>
