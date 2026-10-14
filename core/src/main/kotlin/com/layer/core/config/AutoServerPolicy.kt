@@ -9,12 +9,13 @@ import kotlin.math.roundToLong
  *
  * Soft switch requires 20% and [minSwitchDeltaMs], a confirm probe, cooldown,
  * and a quiet TUN. Failover needs two missed evaluates; a network change
- * settling window blocks force-switch so wifi↔cell timeouts do not tear TUN.
+ * settling window blocks force-switch so a wifi↔cell timeout does not start
+ * a second TUN rebuild. The handoff path itself rebuilds once, after the new
+ * iface has settled.
  *
  * DNS/TCP misses during that window are the new path settling, not a dead
  * origin. They must not count toward failover, and a follow-up probe runs
- * after settling instead of waiting for the 25-minute interval. Recovery is
- * libbox Wake, never TUN reload.
+ * after settling instead of waiting for the 25-minute interval.
  */
 object AutoServerPolicy {
     const val defaultIntervalMinutes = 25

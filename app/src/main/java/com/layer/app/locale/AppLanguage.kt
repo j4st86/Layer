@@ -1,10 +1,10 @@
 package com.layer.app.locale
 
+import android.app.LocaleManager
 import android.content.Context
 import android.content.res.Resources
-import androidx.appcompat.app.AppCompatDelegate
+import android.os.LocaleList
 import androidx.core.content.edit
-import androidx.core.os.LocaleListCompat
 import com.layer.app.box.BoxRuntime
 import com.layer.core.i18n.UiLanguage
 import com.layer.core.i18n.UiLanguageState
@@ -44,20 +44,20 @@ object AppLanguagePreferences {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit {
             putString(KEY, language.storageKey)
         }
-        apply(language)
+        apply(context, language)
     }
 
     fun applySaved(context: Context, updateLibbox: Boolean = true) {
-        apply(get(context), updateLibbox)
+        apply(context, get(context), updateLibbox)
     }
 
-    fun apply(language: AppLanguage, updateLibbox: Boolean = true) {
+    fun apply(context: Context, language: AppLanguage, updateLibbox: Boolean = true) {
         val locales = when (language) {
-            AppLanguage.AUTO -> LocaleListCompat.getEmptyLocaleList()
-            AppLanguage.RUSSIAN -> LocaleListCompat.forLanguageTags("ru")
-            AppLanguage.ENGLISH -> LocaleListCompat.forLanguageTags("en")
+            AppLanguage.AUTO -> LocaleList.getEmptyLocaleList()
+            AppLanguage.RUSSIAN -> LocaleList.forLanguageTags("ru")
+            AppLanguage.ENGLISH -> LocaleList.forLanguageTags("en")
         }
-        AppCompatDelegate.setApplicationLocales(locales)
+        context.getSystemService(LocaleManager::class.java)?.applicationLocales = locales
         UiLanguageState.current = resolved(language)
         if (updateLibbox) {
             val tag = if (UiLanguageState.isRussian) "ru" else "en"

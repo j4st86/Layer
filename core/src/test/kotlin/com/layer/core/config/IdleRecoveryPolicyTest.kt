@@ -196,6 +196,30 @@ class IdleRecoveryPolicyTest {
         assertTrue(IdleRecoveryPolicy.shouldResetConnections("wwan1", "wlan0"))
         assertTrue(IdleRecoveryPolicy.shouldResetConnections("none", "wwan1"))
         assertEquals(5_000L, IdleRecoveryPolicy.interfaceSettleMs)
+        assertEquals(
+            IdleRecoveryPolicy.HandoffReload.Reload,
+            IdleRecoveryPolicy.handoffReload("wlan0", "wwan1"),
+        )
+        assertEquals(
+            IdleRecoveryPolicy.HandoffReload.Reload,
+            IdleRecoveryPolicy.handoffReload("wwan1", "wlan0"),
+        )
+        assertEquals(
+            IdleRecoveryPolicy.HandoffReload.Cancel,
+            IdleRecoveryPolicy.handoffReload("wlan0", "none"),
+        )
+        assertEquals(
+            IdleRecoveryPolicy.HandoffReload.Cancel,
+            IdleRecoveryPolicy.handoffReload("wwan1", ""),
+        )
+        assertEquals(
+            IdleRecoveryPolicy.HandoffReload.Keep,
+            IdleRecoveryPolicy.handoffReload("wlan0", "wlan0"),
+        )
+        assertEquals(
+            IdleRecoveryPolicy.HandoffReload.Keep,
+            IdleRecoveryPolicy.handoffReload(null, "wwan1"),
+        )
     }
 
     @Test

@@ -10,8 +10,11 @@ interface BoxHost {
     fun dbg(message: String)
     fun recoverAfterHandoff(reason: String)
 
-    /** Underlying iface name changed. The host closes dead app sockets after a settle delay. */
-    fun scheduleConnectionReset(iface: String)
+    /**
+     * Underlying iface was published. A real wifi↔cell change rebuilds TUN
+     * after a settle delay. Losing the network cancels that rebuild.
+     */
+    fun onUnderlyingIface(previous: String?, next: String)
     fun notifyAutoServerTransport(capabilities: NetworkCapabilities)
     fun onTunDump(dump: String)
 }

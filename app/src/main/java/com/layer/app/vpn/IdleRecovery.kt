@@ -12,8 +12,9 @@ import android.os.SystemClock
 import com.layer.core.config.IdleRecoveryPolicy
 
 /**
- * SCREEN_ON / Doze / wifi↔cell recovery. Always Wake, never TUN reload:
- * see [IdleRecoveryPolicy].
+ * SCREEN_ON and Doze only wake the outbound. wifi↔cell also wakes immediately,
+ * then [LayerBoxService] rebuilds TUN once the new iface has settled.
+ * See [IdleRecoveryPolicy].
  */
 internal class IdleRecovery(
     private val context: Context,

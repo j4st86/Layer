@@ -84,10 +84,10 @@ index ab52f55e..35f7252f 100644
  	}
 diff --git a/transport/v2rayxhttp/client.go b/transport/v2rayxhttp/client.go
 new file mode 100644
-index 00000000..21d694ea
+index 00000000..5f6a3370
 --- /dev/null
 +++ b/transport/v2rayxhttp/client.go
-@@ -0,0 +1,197 @@
+@@ -0,0 +1,198 @@
 +package v2rayxhttp
 +
 +import (
@@ -198,8 +198,9 @@ index 00000000..21d694ea
 +	request.Header.Set("Content-Type", "application/grpc")
 +	// Current Xray validates padding from Referer?x_padding=, not X-Padding.
 +	request.Header.Set("Referer", c.paddingReferer())
-+	request = request.WithContext(ctx)
-+	conn := v2rayhttp.NewLateHTTPConn(pipeInWriter)
++	requestCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
++	request = request.WithContext(requestCtx)
++	conn := v2rayhttp.NewLateHTTPConn(pipeInWriter, cancel)
 +	go func() {
 +		response, err := c.transport.RoundTrip(request)
 +		if err != nil {

@@ -27,6 +27,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
@@ -137,19 +138,35 @@ internal class LayerBoxService(
     override fun recoverAfterHandoff(reason: String) = idle.recoverAfterHandoff(reason)
 
     @Synchronized
-    override fun scheduleConnectionReset(iface: String) {
+    override fun onUnderlyingIface(previous: String?, next: String) {
+        when (IdleRecoveryPolicy.handoffReload(previous, next)) {
+            IdleRecoveryPolicy.HandoffReload.Keep -> Unit
+            IdleRecoveryPolicy.HandoffReload.Cancel -> {
+                if (resetJob != null) {
+                    dbg("[VPN] event=recover path=handoff action=cancel-reload iface=$next")
+                    cancelConnectionReset()
+                }
+            }
+            IdleRecoveryPolicy.HandoffReload.Reload -> scheduleHandoffReload(next)
+        }
+    }
+
+    @Synchronized
+    private fun scheduleHandoffReload(iface: String) {
         resetJob?.cancel()
         resetJob = scope.launch {
             delay(IdleRecoveryPolicy.interfaceSettleMs)
             if (!phase.isSessionLive() || box == null) {
-                dbg("[VPN] event=recover path=handoff action=skip reason=reset-network why=not-live iface=$iface")
+                dbg("[VPN] event=recover path=handoff action=skip reason=reload why=not-live iface=$iface")
                 return@launch
             }
-            dbg("[VPN] event=recover path=handoff action=reset-network iface=$iface")
-            runCatching { box?.resetNetwork() }
-                .onFailure {
-                    dbg("[VPN] event=recover path=handoff action=reset-network-failed error=${it.message} iface=$iface")
-                }
+            val connectivity = vpn.getSystemService(ConnectivityManager::class.java)
+            if (UnderlyingDns.pickUnderlyingNetwork(connectivity) == null) {
+                dbg("[VPN] event=recover path=handoff action=skip reason=reload why=no-network iface=$iface")
+                return@launch
+            }
+            dbg("[VPN] event=recover path=handoff action=reload iface=$iface")
+            reload()
         }
     }
 
@@ -253,7 +270,9 @@ internal class LayerBoxService(
     }
 
     private suspend fun reloadLocked() {
-        cancelConnectionReset()
+        // The handoff job calls reload itself. Cancelling that job here would
+        // abort the rebuild halfway through.
+        cancelConnectionReset(except = currentCoroutineContext()[Job])
         if (phase == VpnPhase.Stopping || phase == VpnPhase.Stopped) return
         if (box == null) {
             dbg("[VPN] event=reload action=start-vpn reason=no-command-server")
@@ -392,9 +411,10 @@ internal class LayerBoxService(
     }
 
     @Synchronized
-    private fun cancelConnectionReset() {
-        resetJob?.cancel()
+    private fun cancelConnectionReset(except: Job? = null) {
+        val job = resetJob ?: return
         resetJob = null
+        if (job != except) job.cancel()
     }
 
     private fun ensureBox(): LibboxSession {

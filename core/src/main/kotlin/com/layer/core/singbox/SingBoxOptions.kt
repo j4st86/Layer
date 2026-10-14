@@ -14,7 +14,7 @@ import kotlinx.serialization.json.JsonClassDiscriminator
  * assembles these models instead of concatenating JSON by hand.
  *
  * XHTTP is a Layer patch, so it is modeled here even though it is absent
- * from the stock 1.14.1 schema.
+ * from the stock 1.14.3 schema.
  */
 @Serializable
 data class SingBoxConfig(

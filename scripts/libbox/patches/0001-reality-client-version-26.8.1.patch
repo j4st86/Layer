@@ -1,5 +1,5 @@
 diff --git a/common/tls/reality_client.go b/common/tls/reality_client.go
-index af64ef6f..2b3c7784 100644
+index 13f88e38..c630f925 100644
 --- a/common/tls/reality_client.go
 +++ b/common/tls/reality_client.go
 @@ -183,7 +183,7 @@ func (e *RealityClientConfig) ClientHandshake(ctx context.Context, conn net.Conn

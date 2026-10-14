@@ -6,8 +6,9 @@ import com.networknt.schema.SchemaRegistry
 import com.networknt.schema.SpecificationVersion
 
 /**
- * Stock sing-box 1.14.1 JSON Schema. XHTTP configs are out of scope:
- * that transport exists only in our libbox patch.
+ * Stock sing-box JSON Schema. The document is unchanged from 1.14.1 through
+ * 1.14.3. XHTTP configs are out of scope: that transport exists only in our
+ * libbox patch.
  */
 object SingBoxSchema {
     private val schema by lazy {

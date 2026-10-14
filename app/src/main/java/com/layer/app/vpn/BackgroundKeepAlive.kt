@@ -143,7 +143,7 @@ object BackgroundKeepAlive {
     private fun runAnyInBackgroundMode(context: Context): Int? {
         val appOps = context.getSystemService(AppOpsManager::class.java) ?: return null
         return runCatching {
-            appOps.unsafeCheckOpNoThrow(
+            appOps.checkOpNoThrow(
                 OPSTR_RUN_ANY_IN_BACKGROUND,
                 Process.myUid(),
                 context.packageName,

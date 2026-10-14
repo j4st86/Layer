@@ -108,8 +108,9 @@ func (c *Client) DialContext(ctx context.Context) (net.Conn, error) {
 	request.Header.Set("Content-Type", "application/grpc")
 	// Current Xray validates padding from Referer?x_padding=, not X-Padding.
 	request.Header.Set("Referer", c.paddingReferer())
-	request = request.WithContext(ctx)
-	conn := v2rayhttp.NewLateHTTPConn(pipeInWriter)
+	requestCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	request = request.WithContext(requestCtx)
+	conn := v2rayhttp.NewLateHTTPConn(pipeInWriter, cancel)
 	go func() {
 		response, err := c.transport.RoundTrip(request)
 		if err != nil {

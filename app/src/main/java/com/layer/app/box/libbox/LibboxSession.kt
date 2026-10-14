@@ -53,7 +53,7 @@ class LibboxSession(
 
     fun startOrReload(json: String) {
         commandServer.startOrReloadService(json, OverrideOptions())
-        // 1.14.1 serves the streams over gRPC, and GetDefaultLogLevel answers
+        // 1.14 serves the streams over gRPC, and GetDefaultLogLevel answers
         // "invalid argument" while the box instance is nil. Attaching from init
         // lost that race every time and killed core logs for the whole session.
         if (logClient == null) attachLogs()
@@ -61,10 +61,6 @@ class LibboxSession(
 
     fun wake() {
         commandServer.wake()
-    }
-
-    fun resetNetwork() {
-        commandServer.resetNetwork()
     }
 
     fun close() {

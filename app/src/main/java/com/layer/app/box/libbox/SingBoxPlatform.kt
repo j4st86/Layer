@@ -15,7 +15,6 @@ import android.os.Build
 import android.os.Process
 import android.system.OsConstants
 import com.layer.app.box.BoxHost
-import com.layer.core.config.IdleRecoveryPolicy
 import com.layer.core.config.RoutableDnsAnswers
 import com.layer.core.config.UidPackageCache
 import com.layer.app.vpn.AutoServerSelector
@@ -241,9 +240,7 @@ internal class SingBoxPlatform(
                 val previous = publishedIfaceName
                 publishedIfaceName = published
                 host.dbg("[NET] event=underlying-networks iface=$published")
-                if (IdleRecoveryPolicy.shouldResetConnections(previous, published)) {
-                    host.scheduleConnectionReset(published)
-                }
+                host.onUnderlyingIface(previous, published)
             }
             .onFailure {
                 host.dbg("[NET] event=underlying-networks action=fail error=${it.message}")
