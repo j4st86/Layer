@@ -85,6 +85,31 @@ class VpnNotification(private val service: Service) {
             .cancel(NOTIFICATION_ID)
     }
 
+    /** Stays in the shade after the VPN service stops. The user just pressed Rewire. */
+    fun showServerUnreachable(serverName: String?) {
+        ensureChannel()
+        val open = PendingIntent.getActivity(
+            service,
+            0,
+            android.content.Intent(service, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val name = serverName?.takeIf { it.isNotBlank() }
+        val builder = Notification.Builder(service, CHANNEL_ID)
+            .setContentTitle(service.getString(R.string.notification_server_unreachable))
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentIntent(open)
+            .setOngoing(false)
+            .setAutoCancel(true)
+            .setOnlyAlertOnce(false)
+            .setCategory(Notification.CATEGORY_STATUS)
+        if (name != null) {
+            builder.setContentText(service.getString(R.string.notification_server_unreachable_named, name))
+        }
+        service.getSystemService(NotificationManager::class.java)
+            .notify(NOTIFICATION_ID, builder.build())
+    }
+
     companion object {
         const val CHANNEL_ID = "layer_vpn"
         const val NOTIFICATION_ID = 1

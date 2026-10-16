@@ -180,6 +180,8 @@
     <string name="notification_wired">Wired to</string>
     <string name="notification_unwire">Unwire</string>
     <string name="notification_rewire">Rewire</string>
+    <string name="notification_server_unreachable">Server is unreachable</string>
+    <string name="notification_server_unreachable_named">%1$s did not respond</string>
 
     <string name="error_generic">Error</string>
     <string name="error_config">Configuration error</string>

@@ -121,14 +121,14 @@ class VpnController(
         }
     }
 
-    fun reportServerUnreachable() {
+    fun reportServerUnreachable(fromNotificationRewire: Boolean = false) {
         if (status.value.state != VpnConnectionState.CONNECTED &&
             status.value.state != VpnConnectionState.RECONNECTING
         ) {
             return
         }
         diagnostics.append("[VPN] event=unreachable action=report")
-        LayerVpnService.reportUnreachable(context)
+        LayerVpnService.reportUnreachable(context, fromNotificationRewire)
     }
 
     fun noteServerReachable() {

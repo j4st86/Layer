@@ -182,6 +182,8 @@
     <string name="notification_wired">Подключено</string>
     <string name="notification_unwire">Отключить</string>
     <string name="notification_rewire">Переподключить</string>
+    <string name="notification_server_unreachable">Сервер недоступен</string>
+    <string name="notification_server_unreachable_named">%1$s не ответил</string>
 
     <string name="error_generic">Ошибка</string>
     <string name="error_config">Ошибка конфигурации</string>

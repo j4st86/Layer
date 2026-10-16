@@ -19,6 +19,7 @@ import com.layer.core.config.AutoServerPolicy
 import com.layer.core.config.IdleRecoveryPolicy
 import com.layer.core.config.RuleSetCatalog
 import com.layer.core.config.ServerDialAddress
+import com.layer.core.diagnostics.DiagnosticKind
 import com.layer.core.diagnostics.ErrorMapper
 import com.layer.core.diagnostics.LogSanitizer
 import kotlinx.coroutines.CoroutineScope
@@ -57,6 +58,9 @@ internal class LayerBoxService(
     private var box: LibboxSession? = null
     private var resetJob: Job? = null
     private var serverName: String = ""
+
+    /** Rewire in the shade failed its reachability check. Say so after the VPN stops. */
+    private var notifyRewireUnreachable = false
     private val idle = IdleRecovery(
         context = vpn,
         isLive = { phase.isSessionLive() && box != null },
@@ -80,13 +84,17 @@ internal class LayerBoxService(
                 Service.START_NOT_STICKY
             }
             LayerVpnService.ACTION_RELOAD, LayerVpnService.ACTION_REWIRE -> {
-                if (intent.action == LayerVpnService.ACTION_REWIRE) {
+                val fromNotification = intent.action == LayerVpnService.ACTION_REWIRE
+                if (fromNotification) {
                     dbg("[VPN] event=rewire source=notification")
                 }
-                scope.launch { reload() }
+                scope.launch { reload(fromNotification) }
                 Service.START_STICKY
             }
             LayerVpnService.ACTION_UNREACHABLE -> {
+                if (intent.getBooleanExtra(LayerVpnService.EXTRA_FROM_REWIRE, false)) {
+                    notifyRewireUnreachable = true
+                }
                 scope.launch { onServerUnreachable() }
                 Service.START_STICKY
             }
@@ -172,7 +180,8 @@ internal class LayerBoxService(
 
     private suspend fun start() = lifecycleMutex.withLock { startLocked() }
 
-    private suspend fun reload() = lifecycleMutex.withLock { reloadLocked() }
+    private suspend fun reload(fromNotification: Boolean = false) =
+        lifecycleMutex.withLock { reloadLocked(fromNotification) }
 
     fun requestStop() {
         if (phase == VpnPhase.Stopped || phase == VpnPhase.Stopping || phase == VpnPhase.Failed) {
@@ -183,6 +192,7 @@ internal class LayerBoxService(
     }
 
     private suspend fun startLocked() {
+        notifyRewireUnreachable = false
         cancelConnectionReset()
         if (phase != VpnPhase.Starting) return
         if (box != null && phase.isSessionLive()) {
@@ -269,7 +279,7 @@ internal class LayerBoxService(
         }
     }
 
-    private suspend fun reloadLocked() {
+    private suspend fun reloadLocked(fromNotification: Boolean = false) {
         // The handoff job calls reload itself. Cancelling that job here would
         // abort the rebuild halfway through.
         cancelConnectionReset(except = currentCoroutineContext()[Job])
@@ -316,7 +326,9 @@ internal class LayerBoxService(
             updateStatus(VpnConnectionState.CONNECTED, vpn.getString(R.string.status_connected))
             dbg("[VPN] event=reload ok")
             container.diagnostics.lastStartedConfig = LogSanitizer.sanitize(generated.json)
-            container.connectionPing.measureAfterConnected("reconnect")
+            container.connectionPing.measureAfterConnected(
+                if (fromNotification) "rewire" else "reconnect",
+            )
             // Idle/settings reload already includes remote lists when local
             // copies are missing. A second startOrReloadService here tore TUN
             // down again and Telegram's reconnect landed on a dying stack.
@@ -459,8 +471,8 @@ internal class LayerBoxService(
         idle.unregister()
         idle.clear()
         VpnStatusStore.clearTraffic()
-        if (failed) {
-            val mapped = ErrorMapper.map(raw)
+        val mapped = if (failed) ErrorMapper.map(raw) else null
+        if (mapped != null) {
             val sanitizedRaw = LogSanitizer.sanitize(raw)
             dbg(
                 "[VPN] event=fail kind=${mapped.kind} " +
@@ -487,8 +499,17 @@ internal class LayerBoxService(
         }
         runCatching { box?.close() }
         box = null
-        notification.cancel()
-        vpn.stopForeground(Service.STOP_FOREGROUND_REMOVE)
+        val showUnreachable = failed && notifyRewireUnreachable &&
+            mapped?.kind == DiagnosticKind.SERVER_UNREACHABLE
+        notifyRewireUnreachable = false
+        if (showUnreachable) {
+            dbg("[VPN] event=unreachable action=notify source=rewire")
+            vpn.stopForeground(Service.STOP_FOREGROUND_DETACH)
+            notification.showServerUnreachable(serverName.ifBlank { null })
+        } else {
+            notification.cancel()
+            vpn.stopForeground(Service.STOP_FOREGROUND_REMOVE)
+        }
         vpn.stopSelf()
     }
 
@@ -609,11 +630,15 @@ internal class LayerBoxService(
     }
 
     fun noteServerReachable() {
+        notifyRewireUnreachable = false
         container.autoServerSelector.noteServerReachable()
     }
 
     private suspend fun onServerUnreachable() {
-        if (phase != VpnPhase.Started && phase != VpnPhase.Reloading) return
+        if (phase != VpnPhase.Started && phase != VpnPhase.Reloading) {
+            notifyRewireUnreachable = false
+            return
+        }
         val settings = container.repository.currentSnapshot().settings
         val canSwitch = settings.autoSelectServerEnabled &&
             AutoServerPolicy.canEnable(settings.servers.size)

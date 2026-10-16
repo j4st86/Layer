@@ -44,6 +44,7 @@ class LayerVpnService : VpnService() {
         const val ACTION_GIVE_UP = "com.layer.app.GIVE_UP"
         const val ACTION_IDLE_PING = "com.layer.app.IDLE_PING"
         const val EXTRA_SERVER_NAME = "com.layer.app.EXTRA_SERVER_NAME"
+        const val EXTRA_FROM_REWIRE = "com.layer.app.EXTRA_FROM_REWIRE"
 
         @Volatile
         private var running: LayerVpnService? = null
@@ -73,8 +74,11 @@ class LayerVpnService : VpnService() {
             context.startForegroundService(intent)
         }
 
-        fun reportUnreachable(context: Context) {
+        fun reportUnreachable(context: Context, fromNotificationRewire: Boolean = false) {
             val intent = Intent(context, LayerVpnService::class.java).setAction(ACTION_UNREACHABLE)
+            if (fromNotificationRewire) {
+                intent.putExtra(EXTRA_FROM_REWIRE, true)
+            }
             context.startService(intent)
         }
 
